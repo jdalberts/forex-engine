@@ -56,12 +56,14 @@ class ExecutionGateway:
             db.update_signal_status(self.db_path, signal["id"], "blocked_position")
             return None
 
-        # 3. Size the trade
+        # 3. Size the trade (contracts = risk_amount / (stop_pips × pip_value_usd))
         size = self.sizer.lot_size(
-            balance    = self.equity.current_balance,
-            entry      = signal["entry"],
-            stop       = signal["stop"],
-            risk_scale = self.equity.risk_scale,
+            balance       = self.equity.current_balance,
+            entry         = signal["entry"],
+            stop          = signal["stop"],
+            pip_size      = signal.get("pip_size",      0.0001),
+            pip_value_usd = signal.get("pip_value_usd", 10.0),
+            risk_scale    = self.equity.risk_scale,
         )
         if size <= 0:
             log.error("Calculated size is zero — skipping")
@@ -80,18 +82,27 @@ class ExecutionGateway:
         broker_ref: Optional[str] = None
         if not self.dry_run:
             result = self.client.place_order(
-                epic        = config.EPIC,
+                epic        = signal["epic"],
                 direction   = direction_ig,
                 size        = size,
                 stop_level  = signal["stop"],
                 limit_level = signal["target"],
-                currency    = config.CURRENCY,
+                currency    = signal["currency"],
             )
             if result is None:
                 log.error("IG order submission failed")
                 db.update_signal_status(self.db_path, signal["id"], "order_failed")
                 return None
             broker_ref = result.get("dealReference")
+
+            # Confirm the deal was actually accepted (not just received)
+            if broker_ref:
+                confirm = self.client.confirm_order(broker_ref)
+                if confirm and confirm.get("dealStatus") != "ACCEPTED":
+                    reason = confirm.get("reason", "UNKNOWN")
+                    log.error("Deal REJECTED by IG  reason=%s — not recording trade", reason)
+                    db.update_signal_status(self.db_path, signal["id"], "order_failed")
+                    return None
 
         # 5. Persist
         db.update_signal_status(self.db_path, signal["id"], "submitted")

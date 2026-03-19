@@ -123,20 +123,19 @@ class IGClient:
 
     # ── Market data ───────────────────────────────────────────────────────────
 
-    def get_snapshot(self, epic: str, price_scale: int = 1) -> Optional[dict]:
+    def get_snapshot(self, epic: str) -> Optional[dict]:
         """Current bid/offer from GET /markets/{epic}.
-
-        price_scale: divide raw IG price by this to get actual FX rate.
-                     EUR/USD CFD is quoted as ×10000 by IG (11510 → 1.1510).
+        Uses the API's own scalingFactor to convert raw prices to real FX rates.
         """
         resp = self._request("GET", f"/markets/{epic}")
         if resp is None:
             return None
 
-        data     = resp.json()
-        snapshot = data.get("snapshot", {})
-        bid      = snapshot.get("bid")
-        offer    = snapshot.get("offer")
+        data           = resp.json()
+        snapshot       = data.get("snapshot", {})
+        scaling_factor = float(snapshot.get("scalingFactor", 1) or 1)
+        bid            = snapshot.get("bid")
+        offer          = snapshot.get("offer")
 
         if bid is None:
             log.warning(
@@ -146,10 +145,11 @@ class IGClient:
             return None
 
         return {
-            "bid":    float(bid)   / price_scale,
-            "ask":    float(offer) / price_scale if offer is not None else float(bid) / price_scale,
-            "status": snapshot.get("marketStatus"),
-            "time":   datetime.now(timezone.utc).replace(tzinfo=None),
+            "bid":            float(bid)   / scaling_factor,
+            "ask":            float(offer) / scaling_factor if offer is not None else float(bid) / scaling_factor,
+            "scaling_factor": scaling_factor,
+            "status":         snapshot.get("marketStatus"),
+            "time":           datetime.now(timezone.utc).replace(tzinfo=None),
         }
 
     def get_history(
@@ -157,7 +157,7 @@ class IGClient:
         epic: str,
         resolution: str = "HOUR",
         max_bars: int = 500,
-        price_scale: int = 1,
+        price_scale: int = 1,   # kept for compat; overridden by scalingFactor if snapshot called first
     ) -> list[dict]:
         """Historical OHLC bars from GET /prices/{epic} (v3, date-range).
 
@@ -262,6 +262,22 @@ class IGClient:
         result = resp.json()
         log.info("Order placed — dealReference: %s", result.get("dealReference"))
         return result
+
+    def confirm_order(self, deal_reference: str) -> Optional[dict]:
+        """Check deal confirmation — POST response only means received, not accepted."""
+        import time as _time
+        _time.sleep(1)   # give IG a moment to process
+        resp = self._request("GET", f"/confirms/{deal_reference}")
+        if resp is None:
+            return None
+        data = resp.json()
+        status = data.get("dealStatus", "UNKNOWN")
+        reason = data.get("reason", "UNKNOWN")
+        if status == "ACCEPTED":
+            log.info("Deal ACCEPTED  ref=%s  fill=%.5f", deal_reference, data.get("level", 0))
+        else:
+            log.error("Deal REJECTED  ref=%s  reason=%s", deal_reference, reason)
+        return data
 
     def get_open_positions(self) -> list[dict]:
         """All open CFD positions."""

@@ -27,45 +27,50 @@ def state():
     """Single endpoint — returns everything the UI needs."""
     db_path = config.DB_PATH
 
-    quote    = db.latest_quote(db_path, config.SYMBOL)
-    position = db.open_trade(db_path, config.SYMBOL)
-    signals  = db.recent_signals(db_path, limit=10)
-    trades   = db.recent_trades(db_path, limit=10)
-    equity   = db.equity_history(db_path, limit=100)
+    # Per-pair quotes and positions
+    pairs_state = {}
+    for symbol, pcfg in config.PAIRS.items():
+        quote    = db.latest_quote(db_path, symbol)
+        position = db.open_trade(db_path, symbol)
 
-    # Derive spread_pips from latest quote
-    spread_pips = None
-    if quote:
-        try:
-            spread_pips = round(
-                (float(quote["ask"]) - float(quote["bid"])) / config.PIP_SIZE, 1
-            )
-        except Exception:
-            pass
+        spread_pips = None
+        if quote:
+            try:
+                spread_pips = round(
+                    (float(quote["ask"]) - float(quote["bid"])) / pcfg["pip_size"], 1
+                )
+            except Exception:
+                pass
 
-    # Derive live PnL for open position
-    live_pnl = None
-    if position and quote:
-        try:
-            mid   = (float(quote["bid"]) + float(quote["ask"])) / 2
-            entry = float(position["entry_price"])
-            size  = float(position["size"])
-            if position["direction"] == "long":
-                live_pnl = round((mid - entry) * size, 2)
-            else:
-                live_pnl = round((entry - mid) * size, 2)
-        except Exception:
-            pass
+        live_pnl = None
+        if position and quote:
+            try:
+                mid   = (float(quote["bid"]) + float(quote["ask"])) / 2
+                entry = float(position["entry_price"])
+                size  = float(position["size"])
+                if position["direction"] == "long":
+                    live_pnl = round((mid - entry) * size, 2)
+                else:
+                    live_pnl = round((entry - mid) * size, 2)
+            except Exception:
+                pass
+
+        pairs_state[symbol] = {
+            "quote":       dict(quote) if quote else None,
+            "spread_pips": spread_pips,
+            "position":    dict(position) if position else None,
+            "live_pnl":    live_pnl,
+        }
+
+    signals = db.recent_signals(db_path, limit=20)
+    trades  = db.recent_trades(db_path, limit=20)
+    equity  = db.equity_history(db_path, limit=100)
 
     return JSONResponse({
-        "symbol":      config.SYMBOL,
-        "quote":       dict(quote) if quote else None,
-        "spread_pips": spread_pips,
-        "position":    dict(position) if position else None,
-        "live_pnl":    live_pnl,
-        "signals":     signals,
-        "trades":      trades,
-        "equity":      equity,
+        "pairs":   pairs_state,
+        "signals": signals,
+        "trades":  trades,
+        "equity":  equity,
     })
 
 

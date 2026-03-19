@@ -47,8 +47,12 @@ class SpreadFilter:
 
 class PositionSizer:
     """
-    Calculate lot size so that a full stop-out costs exactly
+    Calculate IG contract size so that a full stop-out costs exactly
     risk_fraction * balance * risk_scale.
+
+    Formula: contracts = risk_amount / (stop_pips × pip_value_usd)
+      where pip_value_usd = USD value per pip per 1 standard IG contract.
+      EUR/USD: $10/pip | GBP/USD: $10/pip | USD/CHF: ~$12.50 | GBP/JPY: ~$6.30
     """
 
     def __init__(self, risk_fraction: float = config.RISK_PER_TRADE) -> None:
@@ -56,17 +60,20 @@ class PositionSizer:
 
     def lot_size(
         self,
-        balance:    float,
-        entry:      float,
-        stop:       float,
-        risk_scale: float = 1.0,
+        balance:        float,
+        entry:          float,
+        stop:           float,
+        pip_size:       float = 0.0001,
+        pip_value_usd:  float = 10.0,
+        risk_scale:     float = 1.0,
     ) -> float:
         risk_amount   = balance * self.risk_fraction * risk_scale
         stop_distance = abs(entry - stop)
         if stop_distance <= 0:
             return 0.0
-        size = round(risk_amount / stop_distance, 2)
-        return max(size, 0.01)
+        stop_pips = stop_distance / pip_size
+        contracts = round(risk_amount / (stop_pips * pip_value_usd), 2)
+        return max(contracts, 0.1)   # IG minimum deal size
 
 
 class EquityGuard:

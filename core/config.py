@@ -16,12 +16,19 @@ IG_PASSWORD: str    = os.environ["IG_PASSWORD"]
 IG_ACCOUNT_ID: str  = os.environ.get("IG_ACCOUNT_ID", "Z69JGB")
 IG_DEMO: bool       = os.environ.get("IG_DEMO", "true").lower() == "true"
 
-# ── Instrument ────────────────────────────────────────────────────────────────
-SYMBOL      = "EURUSD"
-EPIC        = "CS.D.EURUSD.CFD.IP"
-CURRENCY    = "USD"
-PIP_SIZE    = 0.0001        # 1 pip for EUR/USD
-PRICE_SCALE = 10000         # IG quotes EUR/USD CFD as integer ×10000 (11510 = 1.1510)
+# ── Instruments ───────────────────────────────────────────────────────────────
+# All share the London/NY overlap window (14:00–18:00 SAST)
+# pip_value_usd: USD value per pip per 1 standard contract (100,000 base units)
+#   EUR/USD: 100,000 × 0.0001 = $10
+#   GBP/USD: 100,000 × 0.0001 = $10 (GBP quoted in USD)
+#   USD/CHF: 100,000 × 0.0001 = CHF10 → ~$12.50 at 0.80 USDCHF
+#   GBP/JPY: 100,000 × 0.01   = JPY1000 → ~$6.30 at 158 USDJPY
+PAIRS: dict = {
+    "EURUSD": {"epic": "CS.D.EURUSD.CFD.IP", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0},
+    "GBPUSD": {"epic": "CS.D.GBPUSD.CFD.IP", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0},
+    "USDCHF": {"epic": "CS.D.USDCHF.CFD.IP", "currency": "CHF", "pip_size": 0.0001, "pip_value_usd": 12.5},
+    "GBPJPY": {"epic": "CS.D.GBPJPY.CFD.IP", "currency": "JPY", "pip_size": 0.01,   "pip_value_usd":  6.3},
+}
 
 # ── Session window (UTC) ──────────────────────────────────────────────────────
 # London/NY overlap = 12:00–16:00 UTC = 14:00–18:00 SAST
@@ -38,4 +45,4 @@ MAX_SPREAD_PIPS: float  = 2.0      # reject if spread wider than 2 pips
 # ── Data ──────────────────────────────────────────────────────────────────────
 DB_PATH: str        = os.environ.get("DB_PATH", "data/forex_engine.db")
 HISTORY_BARS: int   = 500          # bars to seed on first run
-QUOTE_INTERVAL_SEC  = 5            # live quote polling interval
+QUOTE_INTERVAL_SEC  = 15           # live quote polling interval (4 pairs × 4/min = safe)

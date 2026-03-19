@@ -121,18 +121,19 @@ def generate(bars: list[dict]) -> Optional[dict]:
         target = round(entry - TARGET_ATR_MULT * atr, 5)
 
     signal = {
-        "symbol":       config.SYMBOL,
+        "symbol":       "",   # overwritten by engine per-pair
         "strategy":     "mean_reversion",
         "direction":    direction,
         "entry":        round(entry, 5),
         "stop":         stop,
         "target":       target,
+        "atr":          round(atr, 5),   # included so engine can recalc vs live price
         "reason":       reason,
         "generated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
     }
 
     log.info(
-        "Signal: %s %s @ %.5f  stop %.5f  target %.5f  |  %s",
-        direction.upper(), config.SYMBOL, entry, stop, target, reason,
+        "Signal: %s @ %.5f  stop %.5f  target %.5f  |  %s",
+        direction.upper(), entry, stop, target, reason,
     )
     return signal

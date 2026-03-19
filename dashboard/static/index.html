@@ -3,24 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Forex Engine — EUR/USD</title>
+  <title>Forex Engine</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
-    /* ── Reset & base ────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #0d1117;
-      --surface:   #161b22;
-      --border:    #30363d;
-      --text:      #e6edf3;
-      --muted:     #8b949e;
-      --green:     #3fb950;
-      --red:       #f85149;
-      --blue:      #58a6ff;
-      --yellow:    #d29922;
-      --radius:    8px;
-      --font:      'Inter', system-ui, -apple-system, sans-serif;
+      --bg:      #0d1117;
+      --surface: #161b22;
+      --border:  #30363d;
+      --text:    #e6edf3;
+      --muted:   #8b949e;
+      --green:   #3fb950;
+      --red:     #f85149;
+      --blue:    #58a6ff;
+      --yellow:  #d29922;
+      --radius:  8px;
+      --font:    'Inter', system-ui, -apple-system, sans-serif;
     }
 
     body {
@@ -32,8 +31,7 @@
       padding: 20px;
     }
 
-    /* ── Layout ──────────────────────────────────────────────────── */
-    .page { max-width: 1280px; margin: 0 auto; }
+    .page { max-width: 1440px; margin: 0 auto; }
 
     header {
       display: flex;
@@ -44,58 +42,50 @@
       border-bottom: 1px solid var(--border);
     }
 
-    .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; color: var(--text); }
+    .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
     .logo span { color: var(--blue); }
-
     .header-right { display: flex; align-items: center; gap: 16px; }
 
     .pill {
-      padding: 3px 10px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px;
     }
-    .pill-green  { background: rgba(63,185,80,.15); color: var(--green); border: 1px solid rgba(63,185,80,.3); }
-    .pill-yellow { background: rgba(210,153,34,.15); color: var(--yellow); border: 1px solid rgba(210,153,34,.3); }
-    .pill-red    { background: rgba(248,81,73,.15);  color: var(--red);    border: 1px solid rgba(248,81,73,.3); }
+    .pill-green  { background: rgba(63,185,80,.15);  color: var(--green);  border: 1px solid rgba(63,185,80,.3); }
     .pill-muted  { background: rgba(139,148,158,.1); color: var(--muted);  border: 1px solid var(--border); }
-
     #last-update { font-size: 12px; color: var(--muted); }
 
-    /* ── Grid ────────────────────────────────────────────────────── */
-    .grid-top    { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-    .grid-mid    { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-    .grid-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    /* ── Grids ─────────────────────────────────────────────────── */
+    .grid-quotes  { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+    .grid-mid     { display: grid; grid-template-columns: 1fr 1fr 1fr;   gap: 14px; margin-bottom: 14px; }
+    .grid-pos     { display: grid; grid-template-columns: 1fr 1fr;       gap: 14px; margin-bottom: 14px; }
+    .grid-bottom  { display: grid; grid-template-columns: 1fr 1fr;       gap: 14px; }
 
-    /* ── Cards ───────────────────────────────────────────────────── */
+    /* ── Cards ─────────────────────────────────────────────────── */
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 18px 20px;
+      padding: 16px 18px;
     }
 
     .card-title {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: var(--muted);
-      margin-bottom: 14px;
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.8px;
+      color: var(--muted); margin-bottom: 12px;
     }
 
-    /* ── Price card ──────────────────────────────────────────────── */
-    .price-row { display: flex; align-items: baseline; gap: 10px; }
-    .price-label { font-size: 11px; color: var(--muted); width: 36px; }
-    .price-bid  { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
-    .price-ask  { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--muted); }
-    .price-spread { font-size: 12px; color: var(--muted); margin-top: 6px; }
-    .price-time   { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    /* ── Quote cards ────────────────────────────────────────────── */
+    .quote-pair   { font-size: 12px; font-weight: 700; color: var(--blue); margin-bottom: 8px; }
+    .quote-bid    { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .quote-ask    { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--muted); line-height: 1.1; }
+    .quote-label  { font-size: 10px; color: var(--muted); width: 30px; display: inline-block; }
+    .quote-spread { font-size: 11px; color: var(--muted); margin-top: 6px; }
+    .spread-ok    { color: var(--green); }
+    .spread-wide  { color: var(--yellow); }
 
-    /* ── Session / equity summary ─────────────────────────────────── */
-    .stat-row { display: flex; flex-direction: column; gap: 10px; }
+    /* ── Stat rows ──────────────────────────────────────────────── */
+    .stat-row  { display: flex; flex-direction: column; gap: 10px; }
     .stat-item { display: flex; justify-content: space-between; align-items: center; }
     .stat-label { color: var(--muted); font-size: 13px; }
     .stat-value { font-weight: 600; font-size: 14px; }
@@ -103,86 +93,63 @@
     .val-red   { color: var(--red); }
     .val-muted { color: var(--muted); }
 
-    /* ── Position card ───────────────────────────────────────────── */
-    .position-empty { color: var(--muted); font-size: 13px; padding: 10px 0; }
-
-    .pos-direction {
-      font-size: 22px;
-      font-weight: 800;
-      letter-spacing: 1px;
-      margin-bottom: 14px;
-    }
-    .pos-direction.long  { color: var(--green); }
-    .pos-direction.short { color: var(--red);   }
-
-    .pos-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-    .pos-item { display: flex; flex-direction: column; gap: 2px; }
+    /* ── Position cards ─────────────────────────────────────────── */
+    .no-positions { color: var(--muted); font-size: 13px; padding: 8px 0; }
+    .pos-header   { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .pos-pair     { font-size: 13px; font-weight: 700; color: var(--blue); }
+    .pos-dir      { font-size: 13px; font-weight: 800; }
+    .pos-dir.long  { color: var(--green); }
+    .pos-dir.short { color: var(--red); }
+    .pos-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .pos-item  { display: flex; flex-direction: column; gap: 2px; }
     .pos-item-label { font-size: 11px; color: var(--muted); }
-    .pos-item-val   { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .pos-item-val   { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .pnl-pos { color: var(--green); }
+    .pnl-neg { color: var(--red); }
 
-    .pnl-positive { color: var(--green); }
-    .pnl-negative { color: var(--red);   }
+    /* ── Chart ──────────────────────────────────────────────────── */
+    .chart-wrap { position: relative; height: 160px; }
 
-    /* ── Chart ───────────────────────────────────────────────────── */
-    .chart-wrap { position: relative; height: 180px; }
-
-    /* ── Tables ──────────────────────────────────────────────────── */
+    /* ── Tables ─────────────────────────────────────────────────── */
     table { width: 100%; border-collapse: collapse; font-size: 12px; }
     th {
-      text-align: left;
-      padding: 6px 8px;
-      color: var(--muted);
-      font-weight: 600;
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      text-align: left; padding: 6px 8px;
+      color: var(--muted); font-weight: 600;
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
       border-bottom: 1px solid var(--border);
     }
-    td {
-      padding: 7px 8px;
-      border-bottom: 1px solid rgba(48,54,61,.5);
-      font-variant-numeric: tabular-nums;
-    }
+    td { padding: 7px 8px; border-bottom: 1px solid rgba(48,54,61,.5); font-variant-numeric: tabular-nums; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: rgba(255,255,255,.02); }
 
     .tag {
-      display: inline-block;
-      padding: 2px 7px;
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
+      display: inline-block; padding: 2px 7px;
+      border-radius: 4px; font-size: 10px;
+      font-weight: 700; text-transform: uppercase;
     }
-    .tag-long    { background: rgba(63,185,80,.15); color: var(--green); }
-    .tag-short   { background: rgba(248,81,73,.15);  color: var(--red);   }
-    .tag-pending { background: rgba(88,166,255,.1);  color: var(--blue);  }
-    .tag-submitted { background: rgba(63,185,80,.1); color: var(--green); }
-    .tag-blocked { background: rgba(139,148,158,.1); color: var(--muted); }
-    .tag-open    { background: rgba(210,153,34,.1);  color: var(--yellow); }
-    .tag-closed  { background: rgba(139,148,158,.1); color: var(--muted); }
+    .tag-long      { background: rgba(63,185,80,.15);  color: var(--green); }
+    .tag-short     { background: rgba(248,81,73,.15);  color: var(--red); }
+    .tag-pending   { background: rgba(88,166,255,.1);  color: var(--blue); }
+    .tag-submitted { background: rgba(63,185,80,.1);   color: var(--green); }
+    .tag-blocked   { background: rgba(139,148,158,.1); color: var(--muted); }
+    .tag-open      { background: rgba(210,153,34,.1);  color: var(--yellow); }
+    .tag-closed    { background: rgba(139,148,158,.1); color: var(--muted); }
+    .tag-pair      { background: rgba(88,166,255,.1);  color: var(--blue); font-size: 10px; }
 
     .empty-row { color: var(--muted); font-style: italic; padding: 12px 8px; }
 
-    /* ── Responsive ──────────────────────────────────────────────── */
-    @media (max-width: 900px) {
-      .grid-top    { grid-template-columns: 1fr 1fr; }
+    @media (max-width: 1100px) { .grid-quotes { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 800px)  {
+      .grid-quotes { grid-template-columns: 1fr 1fr; }
       .grid-mid    { grid-template-columns: 1fr; }
+      .grid-pos    { grid-template-columns: 1fr; }
       .grid-bottom { grid-template-columns: 1fr; }
-    }
-    @media (max-width: 600px) {
-      .grid-top { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
 <div class="page">
 
-  <!-- Header -->
   <header>
     <div class="logo">Forex<span>Engine</span></div>
     <div class="header-right">
@@ -191,25 +158,14 @@
     </div>
   </header>
 
-  <!-- Row 1: Price | Session/Risk | Equity summary -->
-  <div class="grid-top">
+  <!-- Row 1: 4 live quote cards -->
+  <div class="grid-quotes" id="quotes-grid">
+    <!-- filled by JS -->
+  </div>
 
-    <!-- Price -->
-    <div class="card">
-      <div class="card-title">EUR / USD  Live Quote</div>
-      <div class="price-row">
-        <span class="price-label">BID</span>
-        <span class="price-bid" id="bid">–</span>
-      </div>
-      <div class="price-row" style="margin-top:4px">
-        <span class="price-label">ASK</span>
-        <span class="price-ask" id="ask">–</span>
-      </div>
-      <div class="price-spread" id="spread">Spread: –</div>
-      <div class="price-time"   id="quote-time">–</div>
-    </div>
+  <!-- Row 2: Session & Risk | Equity | Equity curve -->
+  <div class="grid-mid">
 
-    <!-- Session + risk -->
     <div class="card">
       <div class="card-title">Session &amp; Risk</div>
       <div class="stat-row">
@@ -230,13 +186,12 @@
           <span class="stat-value" id="drawdown">–</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">Risk scale</span>
-          <span class="stat-value" id="risk-scale">–</span>
+          <span class="stat-label">Pairs active</span>
+          <span class="stat-value val-muted">4</span>
         </div>
       </div>
     </div>
 
-    <!-- Equity summary -->
     <div class="card">
       <div class="card-title">Equity</div>
       <div class="stat-row">
@@ -249,7 +204,7 @@
           <span class="stat-value" id="balance">–</span>
         </div>
         <div class="stat-item">
-          <span class="stat-label">Open PnL</span>
+          <span class="stat-label">Open PnL (all pairs)</span>
           <span class="stat-value" id="open-pnl">–</span>
         </div>
         <div class="stat-item">
@@ -259,20 +214,6 @@
       </div>
     </div>
 
-  </div>
-
-  <!-- Row 2: Position | Equity curve -->
-  <div class="grid-mid">
-
-    <!-- Open position -->
-    <div class="card">
-      <div class="card-title">Current Position</div>
-      <div id="position-content">
-        <div class="position-empty">No open position</div>
-      </div>
-    </div>
-
-    <!-- Equity curve -->
     <div class="card">
       <div class="card-title">Equity Curve</div>
       <div class="chart-wrap">
@@ -282,49 +223,39 @@
 
   </div>
 
-  <!-- Row 3: Signals | Trades -->
+  <!-- Row 3: Open positions -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-title">Open Positions</div>
+    <div id="positions-grid" class="grid-pos">
+      <div class="no-positions">No open positions</div>
+    </div>
+  </div>
+
+  <!-- Row 4: Signals | Trades -->
   <div class="grid-bottom">
 
     <div class="card">
       <div class="card-title">Recent Signals</div>
-      <div id="signals-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Time</th>
-              <th>Dir</th>
-              <th>Entry</th>
-              <th>Stop</th>
-              <th>Target</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="signals-body">
-            <tr><td colspan="6" class="empty-row">No signals yet</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <table>
+        <thead>
+          <tr><th>Time</th><th>Pair</th><th>Dir</th><th>Entry</th><th>Stop</th><th>Target</th><th>Status</th></tr>
+        </thead>
+        <tbody id="signals-body">
+          <tr><td colspan="7" class="empty-row">No signals yet</td></tr>
+        </tbody>
+      </table>
     </div>
 
     <div class="card">
       <div class="card-title">Recent Trades</div>
-      <div id="trades-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Opened</th>
-              <th>Dir</th>
-              <th>Size</th>
-              <th>Entry</th>
-              <th>PnL</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody id="trades-body">
-            <tr><td colspan="6" class="empty-row">No trades yet</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <table>
+        <thead>
+          <tr><th>Opened</th><th>Pair</th><th>Dir</th><th>Size</th><th>Entry</th><th>PnL</th><th>Status</th></tr>
+        </thead>
+        <tbody id="trades-body">
+          <tr><td colspan="7" class="empty-row">No trades yet</td></tr>
+        </tbody>
+      </table>
     </div>
 
   </div>
@@ -332,68 +263,59 @@
 </div>
 
 <script>
-  // ── Chart setup ─────────────────────────────────────────────────
+  // ── Chart ────────────────────────────────────────────────────────
   const ctx = document.getElementById('equity-chart').getContext('2d');
   const equityChart = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels: [],
-      datasets: [{
-        data: [],
-        borderColor: '#58a6ff',
-        backgroundColor: 'rgba(88,166,255,0.06)',
-        borderWidth: 2,
-        pointRadius: 0,
-        tension: 0.3,
-        fill: true,
-      }]
-    },
+    data: { labels: [], datasets: [{ data: [], borderColor: '#58a6ff',
+      backgroundColor: 'rgba(88,166,255,0.06)', borderWidth: 2,
+      pointRadius: 0, tension: 0.3, fill: true }] },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: {
-        callbacks: {
-          label: ctx => '$' + ctx.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2})
-        }
+        callbacks: { label: c => '$' + c.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2}) }
       }},
       scales: {
         x: { display: false },
-        y: {
-          grid:  { color: 'rgba(48,54,61,0.6)' },
-          ticks: { color: '#8b949e', callback: v => '$' + v.toLocaleString() }
-        }
+        y: { grid: { color: 'rgba(48,54,61,0.6)' },
+             ticks: { color: '#8b949e', callback: v => '$' + v.toLocaleString() } }
       }
     }
   });
 
   // ── Helpers ──────────────────────────────────────────────────────
-  const $  = id => document.getElementById(id);
-  const fmt5 = n  => parseFloat(n).toFixed(5);
+  const $ = id => document.getElementById(id);
+  const fmt5 = n => parseFloat(n).toFixed(5);
+  const fmt3 = n => parseFloat(n).toFixed(3);   // JPY pairs need fewer decimals
+  const fmtPrice = (n, pair) => pair && pair.includes('JPY') ? fmt3(n) : fmt5(n);
   const fmtMoney = n => '$' + parseFloat(n).toLocaleString('en-US', {minimumFractionDigits: 2});
-  const fmtPip = n => (n >= 0 ? '+' : '') + parseFloat(n).toFixed(1) + ' pips';
-
-  function shortTime(iso) {
-    if (!iso) return '–';
-    return iso.replace('T', ' ').slice(0, 16);
+  function shortTime(iso) { return iso ? iso.replace('T', ' ').slice(0, 16) : '–'; }
+  function tag(cls, text) { return `<span class="tag tag-${cls}">${text}</span>`; }
+  function statusTag(s) {
+    const map = { pending: ['pending','pending'], submitted: ['submitted','submitted'],
+      blocked_drawdown: ['blocked','blocked'], blocked_position: ['blocked','blocked'],
+      order_failed: ['blocked','failed'] };
+    const [c, l] = map[s] || ['muted', s];
+    return tag(c, l);
   }
 
-  function tagHtml(cls, text) {
-    return `<span class="tag tag-${cls}">${text}</span>`;
-  }
+  const PAIRS = ['EURUSD', 'GBPUSD', 'USDCHF', 'GBPJPY'];
+  const START = 20000;
 
-  function statusTag(status) {
-    const map = {
-      pending:   ['pending',   'pending'],
-      submitted: ['submitted', 'submitted'],
-      blocked_drawdown: ['blocked', 'blocked'],
-      blocked_position: ['blocked', 'blocked'],
-      order_failed:     ['blocked', 'failed'],
-    };
-    const [cls, label] = map[status] || ['muted', status];
-    return tagHtml(cls, label);
-  }
+  // ── Build quote cards once ───────────────────────────────────────
+  const quotesGrid = $('quotes-grid');
+  PAIRS.forEach(sym => {
+    const label = sym.slice(0,3) + ' / ' + sym.slice(3);
+    quotesGrid.innerHTML += `
+      <div class="card" id="qcard-${sym}">
+        <div class="quote-pair">${label}</div>
+        <div><span class="quote-label">BID</span><span class="quote-bid" id="bid-${sym}">–</span></div>
+        <div style="margin-top:3px"><span class="quote-label">ASK</span><span class="quote-ask" id="ask-${sym}">–</span></div>
+        <div class="quote-spread" id="spread-${sym}">Spread: –</div>
+      </div>`;
+  });
 
-  // ── State update ─────────────────────────────────────────────────
+  // ── Main refresh ─────────────────────────────────────────────────
   async function refresh() {
     let data;
     try {
@@ -402,97 +324,102 @@
       data = await res.json();
     } catch { return; }
 
-    // ── Quote ────────────────────────────────────────────────────
-    if (data.quote) {
-      const bid = parseFloat(data.quote.bid);
-      const ask = parseFloat(data.quote.ask);
-      $('bid').textContent  = fmt5(bid);
-      $('ask').textContent  = fmt5(ask);
-      $('spread').textContent = `Spread: ${data.spread_pips ?? '–'} pips`;
-      $('quote-time').textContent = 'Updated ' + shortTime(data.quote.time) + ' UTC';
-    }
+    const pairs = data.pairs || {};
+
+    // ── Quotes ───────────────────────────────────────────────────
+    let totalPnl = 0, hasPnl = false;
+    PAIRS.forEach(sym => {
+      const ps = pairs[sym];
+      if (!ps || !ps.quote) return;
+      const bid = parseFloat(ps.quote.bid);
+      const ask = parseFloat(ps.quote.ask);
+      $(`bid-${sym}`).textContent = fmtPrice(bid, sym);
+      $(`ask-${sym}`).textContent = fmtPrice(ask, sym);
+      const sp = ps.spread_pips;
+      const spEl = $(`spread-${sym}`);
+      if (sp !== null && sp !== undefined) {
+        spEl.textContent = `Spread: ${sp} pips`;
+        spEl.className = 'quote-spread ' + (sp <= 2 ? 'spread-ok' : 'spread-wide');
+      }
+      if (ps.live_pnl !== null && ps.live_pnl !== undefined) {
+        totalPnl += parseFloat(ps.live_pnl);
+        hasPnl = true;
+      }
+    });
 
     // ── Session ──────────────────────────────────────────────────
     const now = new Date();
-    const utcH = now.getUTCHours(), utcM = now.getUTCMinutes();
-    const utcMins = utcH * 60 + utcM;
-    const sessionOpen = utcMins >= 720 && utcMins < 960; // 12:00–16:00 UTC
-    const pill = $('session-pill');
-    const sessText = $('session-text');
+    const utcMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const sessionOpen = utcMins >= 720 && utcMins < 960;
+    const pill = $('session-pill'), sessText = $('session-text');
     if (sessionOpen) {
-      pill.className = 'pill pill-green';
-      pill.textContent = '● LIVE';
-      sessText.textContent = 'Open';
-      sessText.className = 'stat-value val-green';
+      pill.className = 'pill pill-green'; pill.textContent = '● LIVE';
+      sessText.textContent = 'Open'; sessText.className = 'stat-value val-green';
     } else {
-      pill.className = 'pill pill-muted';
-      pill.textContent = '○ CLOSED';
-      sessText.textContent = 'Closed';
-      sessText.className = 'stat-value val-muted';
+      pill.className = 'pill pill-muted'; pill.textContent = '○ CLOSED';
+      sessText.textContent = 'Closed'; sessText.className = 'stat-value val-muted';
     }
 
-    // ── Equity summary ───────────────────────────────────────────
+    // ── Equity ───────────────────────────────────────────────────
     const eq = data.equity;
-    const START = 20000;
     if (eq && eq.length > 0) {
-      const latest  = parseFloat(eq[eq.length - 1].balance);
-      const dd      = ((START - latest) / START * 100).toFixed(2);
-      const ddEl    = $('drawdown');
+      const latest = parseFloat(eq[eq.length - 1].balance);
+      const dd = ((START - latest) / START * 100).toFixed(2);
+      const ddEl = $('drawdown');
       ddEl.textContent = dd + '%';
-      ddEl.className   = parseFloat(dd) > 0 ? 'stat-value val-red' : 'stat-value val-green';
-
-      const balEl  = $('balance');
+      ddEl.className = parseFloat(dd) > 0 ? 'stat-value val-red' : 'stat-value val-green';
+      const balEl = $('balance');
       balEl.textContent = fmtMoney(latest);
-      balEl.className   = latest >= START ? 'stat-value val-green' : 'stat-value val-red';
-
-      $('risk-scale').textContent = '100%';  // updated below if guard info available
+      balEl.className = latest >= START ? 'stat-value val-green' : 'stat-value val-red';
     } else {
-      $('drawdown').textContent = '0.00%';
-      $('drawdown').className   = 'stat-value val-green';
-      $('balance').textContent  = '$20,000.00';
-      $('balance').className    = 'stat-value val-muted';
+      $('drawdown').textContent = '0.00%'; $('drawdown').className = 'stat-value val-green';
+      $('balance').textContent = '$20,000.00'; $('balance').className = 'stat-value val-muted';
     }
 
-    // ── Open PnL ─────────────────────────────────────────────────
+    // Open PnL across all pairs
     const pnlEl = $('open-pnl');
-    if (data.live_pnl !== null && data.live_pnl !== undefined) {
-      const pnl = parseFloat(data.live_pnl);
-      pnlEl.textContent = (pnl >= 0 ? '+' : '') + fmtMoney(pnl);
-      pnlEl.className   = pnl >= 0 ? 'stat-value val-green' : 'stat-value val-red';
+    if (hasPnl) {
+      pnlEl.textContent = (totalPnl >= 0 ? '+' : '') + fmtMoney(totalPnl);
+      pnlEl.className = totalPnl >= 0 ? 'stat-value val-green' : 'stat-value val-red';
     } else {
-      pnlEl.textContent = '–';
-      pnlEl.className   = 'stat-value val-muted';
+      pnlEl.textContent = '–'; pnlEl.className = 'stat-value val-muted';
     }
-
-    // ── Total trades ─────────────────────────────────────────────
     $('total-trades').textContent = (data.trades || []).length;
 
-    // ── Position ─────────────────────────────────────────────────
-    const posEl = $('position-content');
-    if (data.position) {
-      const p    = data.position;
-      const dir  = p.direction;
-      const pnl  = data.live_pnl;
-      const pnlStr = pnl !== null
-        ? `<span class="${parseFloat(pnl) >= 0 ? 'pnl-positive' : 'pnl-negative'}">${(parseFloat(pnl) >= 0 ? '+' : '') + fmtMoney(pnl)}</span>`
-        : '–';
-      posEl.innerHTML = `
-        <div class="pos-direction ${dir}">${dir.toUpperCase()}</div>
-        <div class="pos-grid">
-          <div class="pos-item"><span class="pos-item-label">Entry</span><span class="pos-item-val">${fmt5(p.entry_price)}</span></div>
-          <div class="pos-item"><span class="pos-item-label">Size</span><span class="pos-item-val">${p.size}</span></div>
-          <div class="pos-item"><span class="pos-item-label">Stop</span><span class="pos-item-val" style="color:var(--red)">${fmt5(p.stop_level)}</span></div>
-          <div class="pos-item"><span class="pos-item-label">Target</span><span class="pos-item-val" style="color:var(--green)">${fmt5(p.limit_level)}</span></div>
-          <div class="pos-item"><span class="pos-item-label">Open PnL</span><span class="pos-item-val">${pnlStr}</span></div>
-          <div class="pos-item"><span class="pos-item-label">Opened</span><span class="pos-item-val" style="font-size:11px;color:var(--muted)">${shortTime(p.opened_at)}</span></div>
-        </div>`;
+    // ── Positions ────────────────────────────────────────────────
+    const posGrid = $('positions-grid');
+    const openPairs = PAIRS.filter(sym => pairs[sym] && pairs[sym].position);
+    if (openPairs.length === 0) {
+      posGrid.innerHTML = '<div class="no-positions">No open positions</div>';
     } else {
-      posEl.innerHTML = '<div class="position-empty">No open position</div>';
+      posGrid.innerHTML = openPairs.map(sym => {
+        const ps = pairs[sym]; const p = ps.position;
+        const dir = p.direction;
+        const pnl = ps.live_pnl;
+        const pnlStr = pnl !== null
+          ? `<span class="${parseFloat(pnl) >= 0 ? 'pnl-pos' : 'pnl-neg'}">${(parseFloat(pnl) >= 0 ? '+' : '') + fmtMoney(pnl)}</span>`
+          : '–';
+        return `
+          <div class="card" style="padding:14px 16px">
+            <div class="pos-header">
+              <span class="pos-pair">${sym.slice(0,3)}/${sym.slice(3)}</span>
+              <span class="pos-dir ${dir}">${dir.toUpperCase()}</span>
+            </div>
+            <div class="pos-grid">
+              <div class="pos-item"><span class="pos-item-label">Entry</span><span class="pos-item-val">${fmtPrice(p.entry_price, sym)}</span></div>
+              <div class="pos-item"><span class="pos-item-label">Size</span><span class="pos-item-val">${p.size}</span></div>
+              <div class="pos-item"><span class="pos-item-label">Stop</span><span class="pos-item-val" style="color:var(--red)">${fmtPrice(p.stop_level, sym)}</span></div>
+              <div class="pos-item"><span class="pos-item-label">Target</span><span class="pos-item-val" style="color:var(--green)">${fmtPrice(p.limit_level, sym)}</span></div>
+              <div class="pos-item"><span class="pos-item-label">Open PnL</span><span class="pos-item-val">${pnlStr}</span></div>
+              <div class="pos-item"><span class="pos-item-label">Opened</span><span class="pos-item-val" style="font-size:11px;color:var(--muted)">${shortTime(p.opened_at)}</span></div>
+            </div>
+          </div>`;
+      }).join('');
     }
 
     // ── Equity chart ─────────────────────────────────────────────
     if (eq && eq.length > 0) {
-      equityChart.data.labels   = eq.map(e => shortTime(e.recorded_at));
+      equityChart.data.labels = eq.map(e => shortTime(e.recorded_at));
       equityChart.data.datasets[0].data = eq.map(e => parseFloat(e.balance));
       const last = parseFloat(eq[eq.length - 1].balance);
       equityChart.data.datasets[0].borderColor = last >= START ? '#3fb950' : '#f85149';
@@ -505,43 +432,43 @@
       sigBody.innerHTML = data.signals.map(s => `
         <tr>
           <td style="color:var(--muted)">${shortTime(s.generated_at)}</td>
-          <td>${tagHtml(s.direction, s.direction.toUpperCase())}</td>
-          <td>${fmt5(s.entry)}</td>
-          <td style="color:var(--red)">${fmt5(s.stop)}</td>
-          <td style="color:var(--green)">${fmt5(s.target)}</td>
+          <td>${tag('pair', s.symbol || 'EURUSD')}</td>
+          <td>${tag(s.direction, s.direction.toUpperCase())}</td>
+          <td>${fmtPrice(s.entry, s.symbol)}</td>
+          <td style="color:var(--red)">${fmtPrice(s.stop, s.symbol)}</td>
+          <td style="color:var(--green)">${fmtPrice(s.target, s.symbol)}</td>
           <td>${statusTag(s.status)}</td>
         </tr>`).join('');
     } else {
-      sigBody.innerHTML = '<tr><td colspan="6" class="empty-row">No signals yet</td></tr>';
+      sigBody.innerHTML = '<tr><td colspan="7" class="empty-row">No signals yet</td></tr>';
     }
 
     // ── Trades table ─────────────────────────────────────────────
     const trBody = $('trades-body');
     if (data.trades && data.trades.length > 0) {
       trBody.innerHTML = data.trades.map(t => {
-        const pnl    = t.pnl;
+        const pnl = t.pnl;
         const pnlStr = pnl !== null
-          ? `<span class="${parseFloat(pnl) >= 0 ? 'pnl-positive' : 'pnl-negative'}">${(parseFloat(pnl) >= 0 ? '+' : '') + fmtMoney(pnl)}</span>`
+          ? `<span class="${parseFloat(pnl) >= 0 ? 'pnl-pos' : 'pnl-neg'}">${(parseFloat(pnl) >= 0 ? '+' : '') + fmtMoney(pnl)}</span>`
           : '–';
         return `
           <tr>
             <td style="color:var(--muted)">${shortTime(t.opened_at)}</td>
-            <td>${tagHtml(t.direction, t.direction.toUpperCase())}</td>
+            <td>${tag('pair', t.symbol || 'EURUSD')}</td>
+            <td>${tag(t.direction, t.direction.toUpperCase())}</td>
             <td>${t.size}</td>
-            <td>${fmt5(t.entry_price)}</td>
+            <td>${fmtPrice(t.entry_price, t.symbol)}</td>
             <td>${pnlStr}</td>
-            <td>${tagHtml(t.status, t.status)}</td>
+            <td>${tag(t.status, t.status)}</td>
           </tr>`;
       }).join('');
     } else {
-      trBody.innerHTML = '<tr><td colspan="6" class="empty-row">No trades yet</td></tr>';
+      trBody.innerHTML = '<tr><td colspan="7" class="empty-row">No trades yet</td></tr>';
     }
 
-    // ── Last update time ─────────────────────────────────────────
     $('last-update').textContent = 'Updated ' + new Date().toLocaleTimeString();
   }
 
-  // Kick off immediately and then every 5 seconds
   refresh();
   setInterval(refresh, 5000);
 </script>
