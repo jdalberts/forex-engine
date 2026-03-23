@@ -90,7 +90,8 @@ def run(dry_run: bool = True) -> None:
 
     # ── Seed history for all pairs ────────────────────────────────────────────
     for symbol, pcfg in pairs.items():
-        seed_history(client, config.DB_PATH, symbol=symbol, epic=pcfg["epic"])
+        seed_history(client, config.DB_PATH, symbol=symbol, epic=pcfg["epic"],
+                     price_scale=pcfg.get("price_scale", 1))
 
     # ── Risk ──────────────────────────────────────────────────────────────────
     session      = SessionGate()
@@ -123,6 +124,7 @@ def run(dry_run: bool = True) -> None:
                 client, config.DB_PATH,
                 symbol=symbol, epic=pcfg["epic"],
                 pip_size=pcfg["pip_size"],
+                price_scale=pcfg.get("price_scale", 1),
             )
             if quote is None:
                 log.warning("[%s] Quote fetch failed — skipping", symbol)

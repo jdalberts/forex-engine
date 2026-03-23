@@ -24,10 +24,13 @@ IG_DEMO: bool       = os.environ.get("IG_DEMO", "true").lower() == "true"
 #   USD/CHF: 100,000 × 0.0001 = CHF10 → ~$12.50 at 0.80 USDCHF
 #   GBP/JPY: 100,000 × 0.01   = JPY1000 → ~$6.30 at 158 USDJPY
 PAIRS: dict = {
-    "EURUSD": {"epic": "CS.D.EURUSD.CFD.IP", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0},
-    "GBPUSD": {"epic": "CS.D.GBPUSD.CFD.IP", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0},
-    "USDCHF": {"epic": "CS.D.USDCHF.CFD.IP", "currency": "CHF", "pip_size": 0.0001, "pip_value_usd": 12.5},
-    "GBPJPY": {"epic": "CS.D.GBPJPY.CFD.IP", "currency": "JPY", "pip_size": 0.01,   "pip_value_usd":  6.3},
+    # price_scale: divide raw IG snapshot/OHLC price by this to get actual FX rate.
+    # EUR/USD CFD is quoted as ×10000 by IG (/markets and /prices return 11510 → 1.1510).
+    # The other pairs are returned in human-readable format by IG, so price_scale=1.
+    "EURUSD": {"epic": "CS.D.EURUSD.CFD.IP", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0,  "price_scale": 10000},
+    "GBPUSD": {"epic": "CS.D.GBPUSD.CFD.IP", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0,  "price_scale": 1},
+    "USDCHF": {"epic": "CS.D.USDCHF.CFD.IP", "currency": "CHF", "pip_size": 0.0001, "pip_value_usd": 12.5,  "price_scale": 1},
+    "GBPJPY": {"epic": "CS.D.GBPJPY.CFD.IP", "currency": "JPY", "pip_size": 0.01,   "pip_value_usd":  6.3,  "price_scale": 1},
 }
 
 # ── Session window (UTC) ──────────────────────────────────────────────────────

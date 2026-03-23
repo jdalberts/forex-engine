@@ -123,19 +123,24 @@ class IGClient:
 
     # ── Market data ───────────────────────────────────────────────────────────
 
-    def get_snapshot(self, epic: str) -> Optional[dict]:
+    def get_snapshot(self, epic: str, price_scale: int = 1) -> Optional[dict]:
         """Current bid/offer from GET /markets/{epic}.
-        Uses the API's own scalingFactor to convert raw prices to real FX rates.
+
+        price_scale: divide raw IG price by this to get actual FX rate.
+          EUR/USD CFD returns raw ×10000 (11510 → 1.1510); other pairs
+          return human-readable prices so price_scale=1.
+          Do NOT use the API's scalingFactor — it is inconsistent across
+          instruments (some pairs already return human-readable prices but
+          still carry a non-1 scalingFactor, causing double-division).
         """
         resp = self._request("GET", f"/markets/{epic}")
         if resp is None:
             return None
 
-        data           = resp.json()
-        snapshot       = data.get("snapshot", {})
-        scaling_factor = float(snapshot.get("scalingFactor", 1) or 1)
-        bid            = snapshot.get("bid")
-        offer          = snapshot.get("offer")
+        data     = resp.json()
+        snapshot = data.get("snapshot", {})
+        bid      = snapshot.get("bid")
+        offer    = snapshot.get("offer")
 
         if bid is None:
             log.warning(
@@ -145,11 +150,10 @@ class IGClient:
             return None
 
         return {
-            "bid":            float(bid)   / scaling_factor,
-            "ask":            float(offer) / scaling_factor if offer is not None else float(bid) / scaling_factor,
-            "scaling_factor": scaling_factor,
-            "status":         snapshot.get("marketStatus"),
-            "time":           datetime.now(timezone.utc).replace(tzinfo=None),
+            "bid":    float(bid)   / price_scale,
+            "ask":    float(offer) / price_scale if offer is not None else float(bid) / price_scale,
+            "status": snapshot.get("marketStatus"),
+            "time":   datetime.now(timezone.utc).replace(tzinfo=None),
         }
 
     def get_history(

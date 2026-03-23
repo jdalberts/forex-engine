@@ -13,10 +13,10 @@ log = logging.getLogger(__name__)
 
 def seed_history(
     client: IGClient,
-    db_path: str     = config.DB_PATH,
-    symbol: str      = "EURUSD",
-    epic: str        = "CS.D.EURUSD.CFD.IP",
-    scaling_factor: int = 1,
+    db_path: str    = config.DB_PATH,
+    symbol: str     = "EURUSD",
+    epic: str       = "CS.D.EURUSD.CFD.IP",
+    price_scale: int = 1,
 ) -> int:
     """
     Download historical OHLC from IG and cache to SQLite.
@@ -30,7 +30,7 @@ def seed_history(
 
     log.info("Seeding %d historical bars for %s…", config.HISTORY_BARS, symbol)
     bars = client.get_history(epic, resolution="HOUR", max_bars=config.HISTORY_BARS,
-                              price_scale=scaling_factor)
+                              price_scale=price_scale)
 
     if not bars:
         log.error("IG returned no historical bars — check credentials and epic [%s]", symbol)
@@ -43,17 +43,18 @@ def seed_history(
 
 def fetch_live_quote(
     client: IGClient,
-    db_path: str    = config.DB_PATH,
-    symbol: str     = "EURUSD",
-    epic: str       = "CS.D.EURUSD.CFD.IP",
-    pip_size: float = 0.0001,
+    db_path: str     = config.DB_PATH,
+    symbol: str      = "EURUSD",
+    epic: str        = "CS.D.EURUSD.CFD.IP",
+    pip_size: float  = 0.0001,
+    price_scale: int = 1,
 ) -> dict | None:
     """
     Fetch the current bid/ask from IG /markets endpoint,
     persist to the quotes table, and return the enriched quote.
-    scalingFactor is read dynamically from the API response.
+    price_scale is passed explicitly from config — see PAIRS["price_scale"].
     """
-    quote = client.get_snapshot(epic)
+    quote = client.get_snapshot(epic, price_scale=price_scale)
     if quote is None:
         return None
 
