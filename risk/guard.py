@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime, time as dtime, timezone
 
 from core import config, db
@@ -72,8 +73,10 @@ class PositionSizer:
         if stop_distance <= 0:
             return 0.0
         stop_pips = stop_distance / pip_size
-        contracts = round(risk_amount / (stop_pips * pip_value_usd), 2)
-        return max(contracts, 0.1)   # IG minimum deal size
+        contracts = risk_amount / (stop_pips * pip_value_usd)
+        # IG minimum deal size is 1 contract; always round up to avoid
+        # MINIMUM_ORDER_SIZE_ERROR (fractional sizes below 1 are rejected)
+        return max(math.ceil(contracts), 1)
 
 
 class EquityGuard:
