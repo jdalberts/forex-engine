@@ -87,6 +87,8 @@ class ExecutionGateway:
                 size        = size,
                 stop_level  = signal["stop"],
                 limit_level = signal["target"],
+                entry       = signal["entry"],
+                pip_size    = signal.get("pip_size", 0.0001),
                 currency    = signal["currency"],
             )
             if result is None:

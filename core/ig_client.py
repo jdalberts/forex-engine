@@ -149,11 +149,21 @@ class IGClient:
             )
             return None
 
+        # Log dealing rules once so we can see minimum stop distance
+        rules = data.get("dealingRules", {})
+        min_stop = rules.get("minNormalStopOrLimitDistance", {})
+        if min_stop:
+            log.info(
+                "%s min stop distance: %s %s",
+                epic, min_stop.get("value"), min_stop.get("unit"),
+            )
+
         return {
             "bid":    float(bid)   / price_scale,
             "ask":    float(offer) / price_scale if offer is not None else float(bid) / price_scale,
             "status": snapshot.get("marketStatus"),
             "time":   datetime.now(timezone.utc).replace(tzinfo=None),
+            "min_stop_pips": float(min_stop.get("value", 0)) if min_stop else 0,
         }
 
     def get_history(
@@ -245,20 +255,34 @@ class IGClient:
         size: float,
         stop_level: float,
         limit_level: float,
+        entry: float,
+        pip_size: float,
         currency: str = "USD",
     ) -> Optional[dict]:
-        """Place a MARKET CFD order with stop and limit."""
+        """Place a MARKET CFD order with stop and limit.
+
+        Uses stopDistance/limitDistance (pips from fill price) rather than
+        absolute stopLevel/limitLevel, so IG calculates levels from the
+        actual fill — avoids ATTACHED_ORDER_LEVEL_ERROR caused by the market
+        moving between our quote and the order being processed.
+        """
+        stop_distance  = round(abs(entry - stop_level)  / pip_size, 1)
+        limit_distance = round(abs(limit_level - entry) / pip_size, 1)
+        log.info(
+            "Order distances — stop: %.1f pips  limit: %.1f pips",
+            stop_distance, limit_distance,
+        )
         payload = {
-            "epic":           epic,
-            "direction":      direction.upper(),
-            "size":           size,
-            "orderType":      "MARKET",
-            "currencyCode":   currency,
-            "forceOpen":      True,
+            "epic":          epic,
+            "direction":     direction.upper(),
+            "size":          size,
+            "orderType":     "MARKET",
+            "currencyCode":  currency,
+            "forceOpen":     True,
             "guaranteedStop": False,
-            "stopLevel":      stop_level,
-            "limitLevel":     limit_level,
-            "expiry":         "-",
+            "stopDistance":  stop_distance,
+            "limitDistance": limit_distance,
+            "expiry":        "-",
         }
         resp = self._request("POST", "/positions/otc", version="2", json=payload)
         if resp is None:
