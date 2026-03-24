@@ -165,6 +165,30 @@ Rounding: 1 dp if price_scale > 1, 5 dp otherwise.
 
 ---
 
+## Revisit After More Data
+
+### Timeout Trade Behaviour
+Current backtest (only 6 trades/pair) shows ~50% timeout rate — too small a sample to conclude anything.
+After pulling 3000 bars (`python backtest.py --fetch --bars 3000`), check:
+
+- What % of all trades are timeouts?
+- Are timeouts net positive or negative in aggregate?
+- Which pairs / strategies (MR vs TF) produce the most timeouts?
+
+**Options to consider depending on what the data shows:**
+
+| Scenario | Action |
+|----------|--------|
+| Timeouts mostly positive | Accept them — they're helping |
+| Timeouts mostly negative | Reduce `MAX_HOLD_BARS` (currently 20) |
+| Too many timeouts on TF | Increase `TF_TARGET_ATR_MULT` — trend target too far |
+| Too many timeouts on MR | Reduce `MR_TARGET_ATR_MULT` from 3.0 → 2.0 (closer target, faster close) |
+| Timeouts near breakeven | Add breakeven rule: move stop to entry once trade is +1R profitable |
+
+**Config to tune:** `MAX_HOLD_BARS` in `backtest.py` (currently 20 bars = 20 hours on 1h data)
+
+---
+
 ## Pending Issues (Low Priority)
 
 | # | Issue | File | Priority |
