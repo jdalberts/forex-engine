@@ -769,6 +769,128 @@ _s10_results = [r for r in results if r[0].startswith("step10:")]
 _s10_pass = sum(1 for _, s in _s10_results if s == PASS)
 print(f"\nStep 10: {_s10_pass}/{len(_s10_results)} passed")
 
+# ══════════════════════════════════════════════════════════════════════════════
+# STEP 11 — High-Priority Fixes (B6 amend_stop scale + News Filter)
+# ══════════════════════════════════════════════════════════════════════════════
+print("\n--- Step 11: amend_stop price scale fix + News Filter ---")
+
+from datetime import datetime as _dt11, date as _date11, timedelta as _td11
+
+# ── B6: amend_stop price_scale parameter ─────────────────────────────────────
+from unittest.mock import MagicMock as _MM, patch as _patch11
+from core.ig_client import IGClient as _IGC
+
+def _make_ig_with_position(epic, deal_id="DEAL123"):
+    """Return an IGClient whose get_open_positions returns one mock position."""
+    ig = _IGC.__new__(_IGC)
+    ig._session = MagicMock() if False else _MM()
+    ig.base_url = "https://demo-api.ig.com/gateway/deal"
+    ig.api_key = ig.identifier = ig.password = ig.account_id = "x"
+    ig._cst = ig._x_security = "tok"
+    ig._auth_time = 0.0
+    pos = {"market": {"epic": epic}, "position": {"dealId": deal_id}}
+    with _patch11.object(ig, "get_open_positions", return_value=[pos]):
+        with _patch11.object(ig, "_request", return_value=_MM(ok=True, json=lambda: {})) as mock_req:
+            ig.amend_stop(epic, 1.1450, price_scale=10000)
+            # Capture what payload was sent
+            call_kwargs = mock_req.call_args
+    return call_kwargs
+
+_call = _make_ig_with_position("CS.D.EURUSD.CFD.IP")
+_payload_sent = _call[1].get("json", {}) if _call else {}
+check("step11: amend_stop multiplies stop by price_scale for EURUSD",
+      abs(_payload_sent.get("stopLevel", 0) - 11450.0) < 1.0)
+
+# price_scale=1 (other pairs) should pass through unchanged
+def _amend_scale1(epic, stop):
+    ig = _IGC.__new__(_IGC)
+    ig.base_url = "https://demo-api.ig.com/gateway/deal"
+    ig.api_key = ig.identifier = ig.password = ig.account_id = "x"
+    ig._cst = ig._x_security = "tok"
+    ig._auth_time = 0.0
+    pos = {"market": {"epic": epic}, "position": {"dealId": "D1"}}
+    with _patch11.object(ig, "get_open_positions", return_value=[pos]):
+        with _patch11.object(ig, "_request", return_value=_MM(ok=True, json=lambda: {})) as mr:
+            ig.amend_stop(epic, stop, price_scale=1)
+            return mr.call_args[1].get("json", {}).get("stopLevel")
+
+_sl = _amend_scale1("CS.D.GBPUSD.CFD.IP", 1.2750)
+check("step11: amend_stop price_scale=1 sends stop unchanged",
+      _sl is not None and abs(_sl - 1.2750) < 0.0001)
+
+check("step11: amend_stop has price_scale parameter",
+      "price_scale" in _IGC.amend_stop.__code__.co_varnames)
+
+# ── News Filter: NFP detection ────────────────────────────────────────────────
+from data.news_filter import _nfp_datetime, is_news_window
+
+# February 2026: first Friday is Feb 6
+_nfp_feb26 = _nfp_datetime(2026, 2)
+check("step11: NFP Feb 2026 is first Friday (Feb 6)",
+      _nfp_feb26.day == 6 and _nfp_feb26.hour == 13 and _nfp_feb26.minute == 30)
+
+# January 2026: first Friday is Jan 2
+_nfp_jan26 = _nfp_datetime(2026, 1)
+check("step11: NFP Jan 2026 is first Friday (Jan 2)",
+      _nfp_jan26.day == 2)
+
+# Exactly at NFP time -> inside window
+_at_nfp = _dt11(2026, 2, 6, 13, 30, 0)
+check("step11: is_news_window True exactly at NFP release time",
+      is_news_window(_at_nfp, pause_minutes=15))
+
+# 10 min before NFP -> inside window (15 min pause)
+_before_nfp = _dt11(2026, 2, 6, 13, 20, 0)
+check("step11: is_news_window True 10 min before NFP",
+      is_news_window(_before_nfp, pause_minutes=15))
+
+# 10 min after NFP -> inside window
+_after_nfp = _dt11(2026, 2, 6, 13, 40, 0)
+check("step11: is_news_window True 10 min after NFP",
+      is_news_window(_after_nfp, pause_minutes=15))
+
+# 20 min after NFP -> outside 15 min window
+_clear_of_nfp = _dt11(2026, 2, 6, 13, 51, 0)
+check("step11: is_news_window False 21 min after NFP",
+      not is_news_window(_clear_of_nfp, pause_minutes=15))
+
+# Mid-week, no event -> False
+_random_time = _dt11(2026, 2, 11, 10, 0, 0)
+check("step11: is_news_window False on quiet mid-week time",
+      not is_news_window(_random_time, pause_minutes=15))
+
+# ── News Filter: custom events file ──────────────────────────────────────────
+import tempfile as _tmp11, os as _os11, json as _json11
+from pathlib import Path as _Path11
+from data.news_filter import _load_custom_events
+
+_ef = _tmp11.mktemp(suffix=".json")
+try:
+    _custom = [{"date": "2026-03-20", "time_utc": "13:30", "name": "Test Event"}]
+    _Path11(_ef).write_text(_json11.dumps(_custom), encoding="utf-8")
+    _loaded_events = _load_custom_events(_ef)
+    check("step11: custom events file loads correctly", len(_loaded_events) == 1)
+    check("step11: custom event datetime is correct",
+          _loaded_events[0] == _dt11(2026, 3, 20, 13, 30))
+finally:
+    if _os11.path.exists(_ef):
+        _os11.remove(_ef)
+
+# Missing custom events file returns []
+check("step11: missing custom events file returns empty list",
+      _load_custom_events("nonexistent_file_xyz.json") == [])
+
+# ── Config constants ──────────────────────────────────────────────────────────
+from core import config as _cfg11
+check("step11: NEWS_FILTER_ENABLED in config", hasattr(_cfg11, "NEWS_FILTER_ENABLED"))
+check("step11: NEWS_PAUSE_MINUTES in config",  hasattr(_cfg11, "NEWS_PAUSE_MINUTES"))
+check("step11: NEWS_EVENTS_FILE in config",    hasattr(_cfg11, "NEWS_EVENTS_FILE"))
+check("step11: FMP_API_KEY in config",         hasattr(_cfg11, "FMP_API_KEY"))
+
+_s11_results = [r for r in results if r[0].startswith("step11:")]
+_s11_pass = sum(1 for _, s in _s11_results if s == PASS)
+print(f"\nStep 11: {_s11_pass}/{len(_s11_results)} passed")
+
 # ── Final summary (re-print with new tests) ────────────────────────────────────
 total   = len(results)
 passed  = sum(1 for _, s in results if s == PASS)

@@ -364,16 +364,21 @@ class IGClient:
             return []
         return resp.json().get("positions", [])
 
-    def amend_stop(self, epic: str, new_stop: float) -> bool:
+    def amend_stop(self, epic: str, new_stop: float, price_scale: int = 1) -> bool:
         """
         [NEW — Step 5] Move the stop level on an open position.
 
         Finds the live position by epic (GET /positions), then amends it via
         PUT /positions/otc/{dealId}.  Returns True on success.
 
-        Note: uses an absolute stop level (not pip distance) — this is the
-        correct format for position *amendments* on the IG REST API.
-        The distance-based approach (Fix 2) only applies to *new* orders.
+        price_scale: same as get_snapshot — raw IG price = human-readable × price_scale.
+          EUR/USD CFD: price_scale=10000 → send 11450 not 1.1450.
+          All other pairs: price_scale=1 → send as-is.
+          [B6 FIX — Step 11] Incorrect scale caused amendment to send 1.1450 to IG
+          for EURUSD when IG expects 11450, which would immediately trigger the stop.
+
+        Note: uses absolute stopLevel (not pip distance) — correct format for
+        position *amendments*. Distance-based (Fix 2) only applies to new orders.
         """
         positions = self.get_open_positions()
         match = next(
@@ -384,15 +389,21 @@ class IGClient:
             log.warning("amend_stop: no open position found for %s", epic)
             return False
 
-        deal_id = match["position"]["dealId"]
+        deal_id  = match["position"]["dealId"]
+        # [B6 FIX — Step 11] Scale to IG raw format.
+        # EURUSD (price_scale=10000): 1.1450 → 11450.0 → round to 1 dp (integer-ish)
+        # Other pairs (price_scale=1):  1.2750 → 1.2750  → keep 5 dp
+        decimals = 1 if price_scale > 1 else 5
+        raw_stop = round(new_stop * price_scale, decimals)
         payload = {
             "trailingStop": False,
-            "stopLevel":    new_stop,
+            "stopLevel":    raw_stop,
         }
         resp = self._request("PUT", f"/positions/otc/{deal_id}", version="2", json=payload)
         if resp is None:
             return False
-        log.info("Stop amended  epic=%s  deal=%s  new_stop=%.5f", epic, deal_id, new_stop)
+        log.info("Stop amended  epic=%s  deal=%s  human=%.5f  raw=%.1f",
+                 epic, deal_id, new_stop, raw_stop)
         return True
 
     def close_position(self, deal_id: str, direction: str, size: float) -> Optional[dict]:

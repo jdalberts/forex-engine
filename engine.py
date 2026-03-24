@@ -24,6 +24,7 @@ from core import config, db
 from core.ig_client import IGClient
 from data.cot_fetcher import refresh_cot, seed_cot                      # [NEW — Step 10]
 from data.fetcher import fetch_live_quote, refresh_bars, seed_history   # [NEW — Step 8]
+from data.news_filter import is_news_window, refresh_news_cache         # [NEW — Step 11]
 from execution.gateway import ExecutionGateway
 from risk.guard import (CorrelationGuard, DailyLossGuard, EquityGuard,    # [NEW — Step 7A]
                         PositionSizer, SessionGate, SpreadFilter,         # [NEW — Step 5]
@@ -183,6 +184,7 @@ def run(dry_run: bool = True) -> None:
     _last_ohlc_refresh  = 0.0   # [NEW — Step 8] monotonic timestamps for rate-limited tasks
     _last_position_sync = 0.0   # [NEW — Step 8]
     _last_cot_refresh   = 0.0   # [NEW — Step 10]
+    _last_news_refresh  = 0.0   # [NEW — Step 11]
 
     # ── Main loop ─────────────────────────────────────────────────────────────
     while _running:
@@ -215,6 +217,11 @@ def run(dry_run: bool = True) -> None:
         if _now_mono - _last_cot_refresh >= config.COT_REFRESH_INTERVAL_SEC:
             refresh_cot(config.DB_PATH)
             _last_cot_refresh = _now_mono
+
+        # [NEW — Step 11] Hourly news cache refresh — keeps upcoming event list current
+        if _now_mono - _last_news_refresh >= config.COT_REFRESH_INTERVAL_SEC:
+            refresh_news_cache(now)
+            _last_news_refresh = _now_mono
 
         # [NEW — Step 8] Mid-session position sync — detect positions IG closed
         if _now_mono - _last_position_sync >= config.POSITION_SYNC_INTERVAL_SEC:
@@ -258,6 +265,11 @@ def run(dry_run: bool = True) -> None:
             if not in_session:
                 continue
 
+            # 2b. [NEW — Step 11] News filter — pause during high-impact releases
+            if config.NEWS_FILTER_ENABLED and is_news_window(now):
+                log.info("[%s] News window active — skipping signal", symbol)
+                continue
+
             # 3. Spread filter
             if not spread_filt.acceptable(quote["spread_pips"]):
                 log.info("[%s] Spread %.1f pips — too wide, skipping", symbol, quote["spread_pips"])
@@ -288,7 +300,8 @@ def run(dry_run: bool = True) -> None:
                         if new_stop:
                             db.update_trade_stop(config.DB_PATH, open_trade_row["id"], new_stop)
                             if not dry_run:
-                                client.amend_stop(pcfg["epic"], new_stop)
+                                client.amend_stop(pcfg["epic"], new_stop,
+                                                  price_scale=pcfg.get("price_scale", 1))   # [B6 FIX — Step 11]
                 continue   # position already open — skip strategy signal
 
             # 7. Load cached bars and run strategy
