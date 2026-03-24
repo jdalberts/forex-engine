@@ -24,7 +24,8 @@ from core import config, db
 from core.ig_client import IGClient
 from data.cot_fetcher import refresh_cot, seed_cot                      # [NEW — Step 10]
 from data.fetcher import fetch_live_quote, refresh_bars, seed_history   # [NEW — Step 8]
-from data.news_filter import is_news_window, refresh_news_cache         # [NEW — Step 11]
+from data.news_filter import (is_news_window, refresh_news_cache,        # [NEW — Step 11]
+                              refresh_central_bank_calendar)
 from execution.gateway import ExecutionGateway
 from risk.guard import (CorrelationGuard, DailyLossGuard, EquityGuard,    # [NEW — Step 7A]
                         PositionSizer, SessionGate, SpreadFilter,         # [NEW — Step 5]
@@ -110,6 +111,7 @@ def run(dry_run: bool = True) -> None:
     log.info("Database ready at %s", config.DB_PATH)
     db.prune_old_records(config.DB_PATH, config.DB_PRUNE_DAYS)             # [NEW — Step 9]
     seed_cot(config.DB_PATH)                                               # [NEW — Step 10]
+    refresh_central_bank_calendar()                                        # [NEW — Step 11] seed news_events.json
 
     # ── IG client ─────────────────────────────────────────────────────────────
     client = IGClient(

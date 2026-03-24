@@ -115,10 +115,11 @@ MTF_RSI_PERIOD: int  = 14            # RSI period for 5m confirmation
 MTF_EMA_PERIOD: int  = 9             # EMA period for 5m momentum check
 
 # ── Economic Calendar / News Filter [NEW — Step 11] ───────────────────────────
-NEWS_FILTER_ENABLED: bool  = True
-NEWS_PAUSE_MINUTES: int    = 15                         # pause this many min before AND after event
-NEWS_EVENTS_FILE: str      = "data/news_events.json"   # user-supplied custom event list (optional)
-FMP_API_KEY: str           = os.environ.get("FMP_API_KEY", "")  # financialmodelingprep.com free key
+NEWS_FILTER_ENABLED: bool        = True
+NEWS_PAUSE_MINUTES: int          = 15                        # pause this many min before AND after event
+NEWS_EVENTS_FILE: str            = "data/news_events.json"  # auto-updated by central bank scraper
+NEWS_CALENDAR_REFRESH_DAYS: int  = 7                        # re-scrape central bank pages every 7 days
+FMP_API_KEY: str                 = os.environ.get("FMP_API_KEY", "")  # paid plan only
 
 # ── COT Report Bias [NEW — Step 10] ──────────────────────────────────────────
 COT_ENABLED: bool             = True   # set False to bypass gate entirely

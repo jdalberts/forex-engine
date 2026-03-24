@@ -1,22 +1,161 @@
 [
-  {"date": "2026-04-29", "time_utc": "19:00", "name": "FOMC Rate Decision"},
-  {"date": "2026-06-17", "time_utc": "19:00", "name": "FOMC Rate Decision (est)"},
-  {"date": "2026-07-29", "time_utc": "19:00", "name": "FOMC Rate Decision (est)"},
-  {"date": "2026-09-16", "time_utc": "19:00", "name": "FOMC Rate Decision (est)"},
-  {"date": "2026-11-04", "time_utc": "19:00", "name": "FOMC Rate Decision (est)"},
-  {"date": "2026-12-16", "time_utc": "19:00", "name": "FOMC Rate Decision (est)"},
-
-  {"date": "2026-04-30", "time_utc": "12:00", "name": "BOE Rate Decision"},
-  {"date": "2026-06-18", "time_utc": "11:00", "name": "BOE Rate Decision"},
-  {"date": "2026-07-30", "time_utc": "11:00", "name": "BOE Rate Decision"},
-  {"date": "2026-09-17", "time_utc": "11:00", "name": "BOE Rate Decision"},
-  {"date": "2026-11-05", "time_utc": "12:00", "name": "BOE Rate Decision"},
-  {"date": "2026-12-17", "time_utc": "12:00", "name": "BOE Rate Decision"},
-
-  {"date": "2026-04-30", "time_utc": "12:15", "name": "ECB Rate Decision"},
-  {"date": "2026-06-11", "time_utc": "12:15", "name": "ECB Rate Decision"},
-  {"date": "2026-07-23", "time_utc": "12:15", "name": "ECB Rate Decision"},
-  {"date": "2026-09-10", "time_utc": "12:15", "name": "ECB Rate Decision"},
-  {"date": "2026-10-29", "time_utc": "13:15", "name": "ECB Rate Decision"},
-  {"date": "2026-12-17", "time_utc": "13:15", "name": "ECB Rate Decision"}
+  {
+    "date": "2026-04-29",
+    "time_utc": "18:00",
+    "name": "FOMC Rate Decision",
+    "_source": "federalreserve.gov"
+  },
+  {
+    "date": "2026-04-30",
+    "time_utc": "11:00",
+    "name": "BOE Rate Decision",
+    "_source": "bankofengland.co.uk"
+  },
+  {
+    "date": "2026-04-30",
+    "time_utc": "12:15",
+    "name": "ECB Rate Decision",
+    "_source": "ecb.europa.eu"
+  },
+  {
+    "date": "2026-06-11",
+    "time_utc": "12:15",
+    "name": "ECB Rate Decision",
+    "_source": "ecb.europa.eu"
+  },
+  {
+    "date": "2026-06-17",
+    "time_utc": "18:00",
+    "name": "FOMC Rate Decision",
+    "_source": "federalreserve.gov"
+  },
+  {
+    "date": "2026-06-18",
+    "time_utc": "11:00",
+    "name": "BOE Rate Decision",
+    "_source": "bankofengland.co.uk"
+  },
+  {
+    "date": "2026-07-23",
+    "time_utc": "12:15",
+    "name": "ECB Rate Decision",
+    "_source": "ecb.europa.eu"
+  },
+  {
+    "date": "2026-07-29",
+    "time_utc": "18:00",
+    "name": "FOMC Rate Decision",
+    "_source": "federalreserve.gov"
+  },
+  {
+    "date": "2026-07-30",
+    "time_utc": "11:00",
+    "name": "BOE Rate Decision",
+    "_source": "bankofengland.co.uk"
+  },
+  {
+    "date": "2026-09-10",
+    "time_utc": "12:15",
+    "name": "ECB Rate Decision",
+    "_source": "ecb.europa.eu"
+  },
+  {
+    "date": "2026-09-16",
+    "time_utc": "18:00",
+    "name": "FOMC Rate Decision",
+    "_source": "federalreserve.gov"
+  },
+  {
+    "date": "2026-09-17",
+    "time_utc": "11:00",
+    "name": "BOE Rate Decision",
+    "_source": "bankofengland.co.uk"
+  },
+  {
+    "date": "2026-10-28",
+    "time_utc": "18:00",
+    "name": "FOMC Rate Decision",
+    "_source": "federalreserve.gov"
+  },
+  {
+    "date": "2026-10-29",
+    "time_utc": "13:15",
+    "name": "ECB Rate Decision",
+    "_source": "ecb.europa.eu"
+  },
+  {
+    "date": "2026-11-05",
+    "time_utc": "12:00",
+    "name": "BOE Rate Decision",
+    "_source": "bankofengland.co.uk"
+  },
+  {
+    "date": "2026-12-09",
+    "time_utc": "19:00",
+    "name": "FOMC Rate Decision",
+    "_source": "federalreserve.gov"
+  },
+  {
+    "date": "2026-12-17",
+    "time_utc": "12:00",
+    "name": "BOE Rate Decision",
+    "_source": "bankofengland.co.uk"
+  },
+  {
+    "date": "2026-12-17",
+    "time_utc": "13:15",
+    "name": "ECB Rate Decision",
+    "_source": "ecb.europa.eu"
+  },
+  {
+    "date": "2027-01-27",
+    "time_utc": "19:00",
+    "name": "FOMC Rate Decision",
+    "_source": "federalreserve.gov"
+  },
+  {
+    "date": "2027-03-17",
+    "time_utc": "18:00",
+    "name": "FOMC Rate Decision",
+    "_source": "federalreserve.gov"
+  },
+  {
+    "date": "2027-04-28",
+    "time_utc": "18:00",
+    "name": "FOMC Rate Decision",
+    "_source": "federalreserve.gov"
+  },
+  {
+    "date": "2027-06-09",
+    "time_utc": "18:00",
+    "name": "FOMC Rate Decision",
+    "_source": "federalreserve.gov"
+  },
+  {
+    "date": "2027-07-28",
+    "time_utc": "18:00",
+    "name": "FOMC Rate Decision",
+    "_source": "federalreserve.gov"
+  },
+  {
+    "date": "2027-09-15",
+    "time_utc": "18:00",
+    "name": "FOMC Rate Decision",
+    "_source": "federalreserve.gov"
+  },
+  {
+    "date": "2027-10-27",
+    "time_utc": "18:00",
+    "name": "FOMC Rate Decision",
+    "_source": "federalreserve.gov"
+  },
+  {
+    "date": "2027-12-08",
+    "time_utc": "19:00",
+    "name": "FOMC Rate Decision",
+    "_source": "federalreserve.gov"
+  },
+  {
+    "_refreshed_at": "2026-03-24"
+  }
 ]
