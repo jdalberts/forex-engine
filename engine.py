@@ -199,6 +199,14 @@ def run(dry_run: bool = True) -> None:
     log.info("Engine running — polling every %ds  (Ctrl+C to stop)",
              config.QUOTE_INTERVAL_SEC)
 
+    send_alert(                                                             # [NEW — Step 18]
+        f"✅ ENGINE STARTED\n"
+        f"Pairs: {', '.join(pairs)}\n"
+        f"Mode: {'DRY RUN' if dry_run else 'LIVE'}\n"
+        f"Session: 14:00–18:00 SAST\n"
+        f"Balance: ${real_balance:,.2f}"
+    )
+
     _last_ohlc_refresh  = 0.0              # [NEW — Step 8] monotonic timestamps for rate-limited tasks
     _last_position_sync = 0.0              # [NEW — Step 8]
     _last_cot_refresh   = time.monotonic() # [NEW — Step 10] seed already ran; don't re-download immediately
