@@ -39,8 +39,11 @@ from core import config, db
 log = logging.getLogger("backtest")
 
 # ── Simulation parameters ──────────────────────────────────────────────────────
-WARMUP_BARS   = 50     # bars discarded at start to let indicators warm up
-MAX_HOLD_BARS = 20     # force-close a position after this many bars
+WARMUP_BARS        = 50     # bars discarded at start to let indicators warm up
+MAX_HOLD_BARS      = 20     # force-close a position after this many bars
+SPREAD_COST_PIPS   = 2.0    # [NEW] round-trip spread deducted from every trade (entry + exit)
+SESSION_START_HOUR = 12     # [NEW] UTC hour — match live engine session gate
+SESSION_END_HOUR   = 16     # [NEW] UTC hour — match live engine session gate
 
 # Import indicator constants and functions from existing strategy modules
 # (same calculations as live trading — no duplication)
@@ -173,21 +176,24 @@ def _size(signal: dict, balance: float, pair_cfg: dict,
     return max(math.ceil(contracts), 1)   # Fix 3: always round up, min 1
 
 
-def _pnl(pos: dict, exit_price: float, pair_cfg: dict) -> float:
-    """Realised P&L in USD for a closed position."""
+def _pnl(pos: dict, exit_price: float, pair_cfg: dict,
+         spread_pips: float = SPREAD_COST_PIPS) -> float:
+    """Realised P&L in USD for a closed position, including round-trip spread cost."""
     pip_size = pair_cfg["pip_size"]
     pips = ((exit_price - pos["entry"]) / pip_size if pos["direction"] == "long"
             else (pos["entry"] - exit_price) / pip_size)
+    pips -= spread_pips   # deduct round-trip spread (entry half + exit half)
     return round(pips * pos["contracts"] * pair_cfg["pip_value_usd"], 2)
 
 
 # ── Core simulation ────────────────────────────────────────────────────────────
 
 def run_backtest(
-    bars:           list[dict],
-    pair_cfg:       dict,
+    bars:            list[dict],
+    pair_cfg:        dict,
     initial_balance: float,
-    use_regime:     bool = False,
+    use_regime:      bool = False,
+    session_filter:  bool = False,   # [NEW] only enter signals during 12–16 UTC
 ) -> dict:
     """
     Simulate trading on `bars`.
@@ -231,6 +237,13 @@ def run_backtest(
         # ── Generate signal if flat ────────────────────────────────────────
         if open_pos is None:
             signal = None
+
+            # [NEW] Session gate — skip entry outside 12:00–16:00 UTC
+            if session_filter:
+                bar_hour = row["time"].hour if hasattr(row["time"], "hour") else pd.to_datetime(row["time"]).hour
+                if not (SESSION_START_HOUR <= bar_hour < SESSION_END_HOUR):
+                    equity_curve.append(balance)
+                    continue
 
             if use_regime:
                 reg = _regime(row)
@@ -425,10 +438,13 @@ def main() -> None:
         print(f"Unknown symbol '{args.symbol}'. Choices: {list(config.PAIRS)}")
         return
 
-    src = "Yahoo Finance" if args.yahoo else ("IG API" if args.fetch else "DB cache")  # [NEW — Step 17]
+    src            = "Yahoo Finance" if args.yahoo else ("IG API" if args.fetch else "DB cache")
+    session_filter = args.yahoo        # apply 12–16 UTC gate when using Yahoo 24h data
+    filters_note   = f"session 12–16 UTC + {SPREAD_COST_PIPS}pip spread" if session_filter else f"{SPREAD_COST_PIPS}pip spread only"
     print(f"\nFOREX BACKTEST  |  balance=${args.balance:,.0f}  |  {datetime.now():%Y-%m-%d %H:%M}")
     print(f"Strategies: Mean Reversion (baseline)  vs  Hybrid (regime-switching)")
-    print(f"Data source: {src}  |  Note: trailing stop not simulated — hybrid results are conservative\n")
+    print(f"Data source: {src}  |  Filters: {filters_note}")
+    print(f"Note: trailing stop / MTF / COT not simulated — live win rate will be higher\n")
 
     all_baseline = []
     all_hybrid   = []
@@ -449,8 +465,8 @@ def main() -> None:
 
         print(f"{len(bars)} bars")
 
-        baseline_result = run_backtest(bars, pcfg, args.balance, use_regime=False)
-        hybrid_result   = run_backtest(bars, pcfg, args.balance, use_regime=True)
+        baseline_result = run_backtest(bars, pcfg, args.balance, use_regime=False, session_filter=session_filter)
+        hybrid_result   = run_backtest(bars, pcfg, args.balance, use_regime=True,  session_filter=session_filter)
 
         print_report(
             symbol     = symbol,
