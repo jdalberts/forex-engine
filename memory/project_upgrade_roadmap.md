@@ -1,8 +1,9 @@
 # Forex Engine — Project Upgrade Roadmap & Memory
 
 ## Overview
-Upgraded a single-strategy mean-reversion forex bot into a hybrid multi-strategy bot
-that auto-detects market conditions and switches strategies accordingly.
+Upgraded a single-strategy mean-reversion forex bot into a fully-automated hybrid
+multi-strategy trading engine with regime detection, news filtering, COT bias, a live
+dashboard, and a backtesting page.
 
 Strict rules applied throughout:
 - No deletions of existing logic
@@ -28,149 +29,209 @@ New standalone module: `detect_market_regime(bars)` → `"ranging"` / `"trending
 
 ### Step 3 — Trend Following Strategy (`strategy/trend_following.py`)
 New strategy: `trend_following_signal(bars)` → signal dict or None
-- EMA fast/slow crossover entry
-- ATR-based stop and target
+- EMA fast/slow crossover entry (12/26 MACD-style)
+- ATR-based stop (2×ATR) and target (4×ATR) for 2:1 R/R
 - Only fires on the crossover bar (not sustained trends)
-- All parameters centralised in `core/config.py`
 
 ### Step 4 — Strategy Switcher (`engine.py`)
 Wired regime detection and trend following into the main engine loop:
-- `select_strategy(regime, bars)` routes to correct strategy
-- `ranging` → mean reversion (existing)
-- `trending` → trend following (new)
+- `ranging` → mean reversion
+- `trending` → trend following
 - `high_volatility` → skip trade
 
 ### Step 5 — Advanced Risk Controls (`risk/guard.py`, `engine.py`)
-- `DailyLossGuard`: pause all new trades if today's realised P&L falls below -DAILY_LOSS_LIMIT × balance. Resets automatically each UTC calendar day.
-- `TrailingStopManager`: ATR-based ratcheting stop for trend_following trades only. Stop only moves in profitable direction.
-
-### Step 7A — Correlation Control (`risk/guard.py`, `core/db.py`, `engine.py`)
-Prevents stacking trades in the same net-USD direction (EURUSD long + GBPUSD long = accidental double USD short).
-
-- `CorrelationGuard` class in `risk/guard.py` — maps `(symbol, direction)` to `USD_LONG` / `USD_SHORT` / standalone group
-- `db.all_open_trades()` — new function to fetch all open trades across all symbols
-- `config.CORR_USD_MAX = 1` — max trades per USD-direction group
-- GBPJPY (no USD leg) is always allowed through
-- Check runs after `select_strategy()` returns so the signal direction is known
-
-### Step 7B — Multi-Timeframe Entry Confirmation (`strategy/mtf_filter.py`, `data/fetcher.py`, `engine.py`)
-Confirms 1h signals using 5-minute bar structure before entry.
-
-- `strategy/mtf_filter.py` — new module, `confirm_entry(signal_data, bars_5m) -> bool`
-- Confirmation: long needs 5m RSI < 60 OR 5m EMA rising; short needs RSI > 40 OR EMA falling
-- Pass-through if insufficient bars (never blocks due to missing data)
-- `seed_history()` in `data/fetcher.py` — added `resolution` param (default `"HOUR"` — fully backward compatible)
-- Engine seeds 5m history on startup for all pairs (when `MTF_ENABLED = True`)
-- New config: `MTF_ENABLED`, `MTF_RESOLUTION`, `MTF_BARS`, `MTF_MIN_BARS`, `MTF_RSI_PERIOD`, `MTF_EMA_PERIOD`
+- `DailyLossGuard`: pause all new trades if today's realised P&L falls below -3% of balance
+- `TrailingStopManager`: ATR-based ratcheting stop for trend_following trades only
 
 ### Step 6 — Vectorised Backtester (`backtest.py`)
-- O(n) indicator computation
+- O(n) indicator computation, no lookahead bias
 - Baseline (mean reversion only) vs hybrid (regime-switching) comparison
 - `run_backtest()`, `compute_stats()`, `print_report()`
-- Usage: `python backtest.py --fetch --symbol EURUSD`
+- Usage: `python backtest.py --fetch --bars 3000`
 
----
+### Step 7A — Correlation Control
+Prevents stacking trades in the same net-USD direction.
+- `CorrelationGuard` maps `(symbol, direction)` to USD_LONG / USD_SHORT / standalone
+- `config.CORR_USD_MAX = 1` — max trades per USD-direction group
+- GBPJPY (no USD leg) always allowed through
 
-## Opus Audit Findings — 2026-03-24
-
-Full codebase audit by Claude Opus. All issues logged here for tracking.
-
-### Critical Bugs / Silent Failures
-
-| # | Issue | File | Status |
-|---|-------|------|--------|
-| B1 | **OHLC bars never refresh after initial seed** — strategies run on stale data all session | `data/fetcher.py`, `engine.py` | ✅ DONE (Step 8) |
-| B2 | **IG-closed positions not detected mid-session** — stopped-out pair stays "open" in DB until restart, blocking new signals | `engine.py` | ✅ DONE (Step 8) |
-| B3 | **5m bars never refresh** — MTF filter operates on startup data only, stale within hours | `engine.py`, `data/fetcher.py` | ✅ DONE (Step 8) |
-| B4 | **PositionSizer silently exceeds risk budget** — forced minimum 1 contract can risk 3–5× intended amount on GBPJPY/USDCHF with wide stops. No warning logged | `risk/guard.py` | ✅ DONE (Step 9) |
-| B5 | **TrailingStopManager state lost on restart** — `_best` dict is in-memory only; trailing stop resets to current price after restart, giving back gains | `risk/guard.py` | ✅ DONE (Step 9) |
-| B6 | **`amend_stop` price scale** — stop level sent as human-readable (1.1450) but IG may expect raw (11450) for EUR/USD CFD amendments. Needs API verification | `core/ig_client.py` | TO INVESTIGATE |
-| B7 | **`upsert_ohlc` return value** — counts rows attempted, not rows inserted; seed logs can overstate what was actually cached | `core/db.py` | LOW |
-| B8 | **Equity table grows forever** — ~960 rows/day, no pruning | `core/db.py` | LOW |
-
-### Missing Features (Pre-Live Checklist)
-
-| # | Feature | Priority | Status |
-|---|---------|----------|--------|
-| M1 | **Weekend/holiday gate** — SessionGate only checks time-of-day, not day-of-week. Engine spins on Saturdays | `risk/guard.py` | ✅ DONE (Step 8) |
-| M2 | **File logging** — currently stdout only; logs lost if running in background | `engine.py` | ✅ DONE (Step 9) |
-| M3 | **Error alerting** — no notification if hard drawdown halts, auth fails, or engine crashes | `engine.py` | ✅ DONE (Step 9) |
-| M4 | **Economic calendar / news filter** — no protection around NFP, CPI, FOMC releases | new module | FUTURE |
-| M5 | **No reconnection backoff** — if IG drops, engine logs errors indefinitely with no backoff | `core/ig_client.py` | ✅ DONE (Step 9) |
-| M6 | **Database backup** — SQLite is single store of all trade history, no backup mechanism | ops | FUTURE |
-| M7 | **Pip value accuracy** — USDCHF ($12.50) and GBPJPY ($6.30) are hardcoded approximations, can be 5–10% off at current rates | `core/config.py` | FUTURE |
-
-### Code Quality Issues
-
-| # | Issue | File | Status |
-|---|-------|------|--------|
-| Q1 | **`_atr()` duplicated 3×** — identical copy in `mean_reversion.py`, `trend_following.py`, `regime_detection.py` | strategy/ | ✅ DONE (Step 9) |
-| Q2 | **`_rsi()` duplicated** — in `mean_reversion.py` and `mtf_filter.py` with slight differences | strategy/ | ✅ DONE (Step 9) |
-| Q3 | **`import pandas as _pd` inside hot loop** — `engine.py` line ~194, inside the per-pair iteration | `engine.py` | ✅ DONE (Step 8) |
-| Q4 | **`datetime.utcnow()` deprecated** — used in `db.py` 4× (Python 3.12+) | `core/db.py` | ✅ DONE (Step 9) |
-| Q5 | **Module-level config caching** — strategy modules copy config at import time; runtime config changes won't propagate | strategy/*.py | LOW |
-| Q6 | **Backtester no spread/slippage** — absolute return numbers untrustworthy; missing ~2–4 pips per round-trip | `backtest.py` | FUTURE |
-| Q7 | **Backtester pagination** — `get_history()` only fetches 1 page; `--bars 3000` only returns ~1000 bars | `backtest.py` | FUTURE |
-
-### Risk Gap Summary
-
-| Gap | Detail | Planned Fix |
-|-----|--------|-------------|
-| DailyLossGuard unrealized P&L | Only counts closed trades — open underwater positions not included | Step 9 |
-| PositionSizer hard cap missing | Minimum 1 contract can silently exceed risk budget | Step 9 |
-| No max simultaneous positions | Correlation guard limits per-group but not total open count | Step 9 |
-| Trailing stop state lost on restart | In-memory only — gains can be given back | Step 9 |
-
----
-
-## Planned Future Upgrades (not yet implemented)
+### Step 7B — Multi-Timeframe Entry Confirmation
+Confirms 1h signals using 5-minute bar structure before entry.
+- `strategy/mtf_filter.py` — `confirm_entry(signal_data, bars_5m) -> bool`
+- Long: 5m RSI < 60 OR 5m EMA rising; short: RSI > 40 OR EMA falling
+- Pass-through if insufficient bars (never blocks on missing data)
 
 ### Step 8 — Critical Fixes (OHLC Refresh + Position Sync + Weekend Gate) ✅ DONE
-Addresses the three most critical gaps identified by Opus audit.
-
-- **B1/B3**: `refresh_bars()` added to `data/fetcher.py` — incremental fetch since last stored bar. Called every `OHLC_REFRESH_INTERVAL_SEC` (120s) for both HOUR and MINUTE_5 resolutions. `ig_client.get_history()` now accepts `from_time` param.
-- **B2**: Mid-session position sync every `POSITION_SYNC_INTERVAL_SEC` (60s) — polls `get_open_positions()` and closes any DB trades that IG has stopped out.
-- **M1**: `SessionGate.is_open()` — added `now.weekday() < 5` (no weekend trading).
-- **Q3**: `import pandas as pd` moved to top of `engine.py` (removed inline import from hot loop).
-- New config: `OHLC_REFRESH_INTERVAL_SEC = 120`, `POSITION_SYNC_INTERVAL_SEC = 60`
-- Tests: 61/61 passing (6 new Step 8 tests added)
+- `refresh_bars()` — incremental OHLC top-up every 120s for HOUR and MINUTE_5
+- Mid-session position sync every 60s — closes DB trades IG has already stopped out
+- `SessionGate.is_open()` — added weekday check (no weekend trading)
+- `import pandas` moved to top of `engine.py` (removed from hot loop)
 
 ### Step 9 — Polish & Hardening ✅ DONE
-- **Q1/Q2**: `strategy/indicators.py` — shared `atr()` and `rsi()`. All 4 strategy modules now import from here; local copies removed.
-- **B4**: `PositionSizer.lot_size()` — hard cap: returns 0 (skip trade) when min-1-contract would exceed `MAX_RISK_OVERRIDE_MULT × intended_risk`. Logs a WARNING.
-- **B5**: `TrailingStopManager` — `db_path` param added; `_best` dict persisted to new `trailing_state` table in SQLite. Restored on restart.
-- **M2**: `RotatingFileHandler` added in `engine.py` — writes to `logs/engine.log` (5 MB, 3 rotations).
-- **M3**: `_alert()` helper in `engine.py` — appends to `logs/alerts.log` on auth failure and hard drawdown halt.
-- **M5**: Exponential backoff in `ig_client._request()` — 3 retries with 2/4/8s waits on `RequestException`.
-- **Q4**: All `datetime.utcnow()` replaced with `datetime.now(timezone.utc)` in `db.py` (5 occurrences).
-- **B8**: `db.prune_old_records()` — deletes quotes older than `DB_PRUNE_DAYS` (90). Called on engine startup.
-- New config: `MAX_RISK_OVERRIDE_MULT`, `DB_PRUNE_DAYS`, `LOG_FILE`, `LOG_MAX_BYTES`, `LOG_BACKUP_COUNT`, `ALERT_FILE`, `IG_RETRY_MAX`, `IG_RETRY_BASE_SEC`
-- Tests: 79/79 passing (18 new Step 9 tests)
+- `strategy/indicators.py` — shared `atr()` and `rsi()`, all duplicates removed
+- `PositionSizer` hard cap — skips trade if min-1-contract exceeds `MAX_RISK_OVERRIDE_MULT × intended_risk`
+- `TrailingStopManager` persists `_best` to `trailing_state` SQLite table (survives restarts)
+- `RotatingFileHandler` — `logs/engine.log` (5MB, 3 rotations)
+- `_alert()` helper — appends to `logs/alerts.log` on auth failure / hard drawdown halt
+- Exponential backoff in `ig_client._request()` — 3 retries, 2/4/8s waits
+- `db.prune_old_records()` — deletes quotes older than 90 days on startup
+- All `datetime.utcnow()` replaced with `datetime.now(timezone.utc)` in `db.py`
 
-### ML Regime Detection
-Replace ADX rule with a trained Random Forest classifier.
-- Features: ADX, RSI slope, ATR ratio, volume trend, Bollinger width, time-of-day
-- Needs labelled training data (hindsight regime per bar)
-- Dependency: scikit-learn, trained model file
-- Retrain periodically as market behaviour shifts
+### Step 10 — COT Report Bias Filter ✅ DONE
+**Files:** `data/cot_fetcher.py` (new), `strategy/cot_bias.py` (new), `core/db.py`, `engine.py`
 
-### COT Report Bias (Weekly)
-CFTC Commitment of Traders — net positioning of commercials vs speculators.
-- Free data from CFTC website (published weekly, 3-day lag)
-- Use as a weekly directional bias filter (don't trade against commercial positioning)
-- Practical for our 1h timeframe; weekly data is sufficient
+CFTC Legacy Futures-Only COT data as a directional macro filter.
+- Downloads `https://www.cftc.gov/files/dea/history/deacot{year}.zip` (free, no API key)
+- Parses EUR, GBP (Sterling), CHF, JPY currency futures from both old and new CFTC column formats
+- 52-week net-spec index: `(current - min_52wk) / (max_52wk - min_52wk)`
+  - index < 0.2 → bias LONG (specs extremely short, mean-reversion signal)
+  - index > 0.8 → bias SHORT (specs extremely long)
+  - 0.2–0.8 → neutral, no filter applied
+- USDCHF inverted (CHF futures are CHF/USD, opposite direction)
+- `seed_cot()` on startup downloads current + prior year; `refresh_cot()` runs hourly
+- `CotBias.get_bias(symbol)` returns "long" / "short" / "neutral"
+- Gate in engine: block signal if COT bias contradicts signal direction
+- **DB table:** `cot_data (report_date, symbol, net_spec, net_comm)`
+- **Config:** `COT_ENABLED`, `COT_LONG_THRESHOLD=0.2`, `COT_SHORT_THRESHOLD=0.8`, `COT_WEEKS_HISTORY=52`, `COT_REFRESH_INTERVAL_SEC=3600`
+- **Tests:** 20 new tests; total 99/99 passing
 
-### Economic Calendar / News Filter
-Pause trading 15 minutes before/after major scheduled releases (NFP, CPI, rate decisions).
-- Economic calendar API (free tiers available)
-- Not a signal source — purely a trade-pause gate
-- News signal quality degrades rapidly post-release; HFTs dominate
+**COT bugs fixed post-deployment:**
+- CFTC URL changed from `fut_cot_txt_{year}.zip` → `deacot{year}.zip`
+- Column names changed from underscore format to human-readable (e.g. `"Noncommercial Positions-Long (All)"`)
+- GBPUSD missing because GBP contract renamed from "BRITISH POUND STERLING" to "BRITISH POUND"
+- Double download on startup fixed: `_last_cot_refresh = time.monotonic()` after seed
 
-### Portfolio-Level Correlation (Dynamic)
-Extend Step 7A from rule-based groups to a rolling 30-day correlation matrix.
-- If two open trades have correlation > 0.7, reduce second position size by 50%
-- Requires storing price correlation calculations across pairs
-- Step 7A (rule-based) is already live and covers the main risk
+### Step 11 — Economic Calendar / News Filter ✅ DONE
+**Files:** `data/news_filter.py` (new), `core/config.py`, `engine.py`, `data/news_events.json` (auto-generated)
+
+Zero-maintenance news blackout filter — pauses all signal entry 15 min before/after high-impact events.
+
+**Coverage (fully automatic, no manual updates needed):**
+1. US NFP — first Friday every month at 13:30 UTC (built-in, no network call)
+2. FOMC rate decisions — scraped weekly from `federalreserve.gov`
+3. BOE rate decisions — scraped weekly from `bankofengland.co.uk`
+4. ECB rate decisions — scraped weekly from `ecb.europa.eu`
+
+**Auto-refresh:** `refresh_central_bank_calendar()` checks `_refreshed_at` sentinel in JSON,
+re-scrapes if older than 7 days. Runs on startup and weekly. `news_events.json` auto-updates —
+no manual maintenance ever needed.
+
+**DST handling:** `_us_is_dst()` / `_eu_is_dst()` use `calendar.monthrange` to find nth
+Sundays correctly (avoids ValueError on months with 31 days).
+
+**B6 fix (amend_stop price scale):** `amend_stop()` now multiplies `new_stop × price_scale`
+before sending to IG. EUR/USD (price_scale=10000) correctly sends 11450 not 1.1450.
+Rounding: 1 dp if price_scale > 1, 5 dp otherwise.
+
+**Config:** `NEWS_FILTER_ENABLED`, `NEWS_PAUSE_MINUTES=15`, `NEWS_EVENTS_FILE`, `NEWS_CALENDAR_REFRESH_DAYS=7`, `FMP_API_KEY`
+**Tests:** 17 new tests; total 116/116 passing
+
+### Step 12 — Dashboard v2 + Backtesting Page ✅ DONE
+**Files:** `dashboard/app.py`, `dashboard/static/index.html`, `dashboard/static/backtest.html` (new)
+
+**Dashboard v2 additions (live dashboard at `/`):**
+- Header: NEWS pill (clear/paused), next event countdown ("Next event: 2h14m")
+- Quote cards: regime tag + last signal readout per pair
+- Filter status bar: per-pair Regime / COT Bias / Session / News columns
+- Session & Risk card: updated to correct values (1% risk, 4%/8% soft/hard DD limits)
+- Equity card: Today's PnL row (realised closed trades since UTC midnight)
+- Trade Statistics card: win rate, profit factor, avg win, avg loss, W/L count (colour-coded)
+- Equity curve: full-width, 260px tall (was 160px squashed in 3-column row)
+- Open positions: regime tag shown on each position card
+
+**Backtesting page at `/backtest`:**
+- Three view modes: Hybrid (regime-switching) / Mean Reversion Only / Side-by-Side Comparison
+- Per-pair stat cards: trades, win rate, total return, max drawdown, profit factor, final balance
+- Per-pair equity curves (Chart.js), overlaid in compare mode (hybrid coloured, baseline dashed grey)
+- Comparison table with green/red better/worse highlighting across all pairs
+- Filterable trade log: by pair, result (win/loss/timeout), strategy (MR/TF)
+- Results cached 5 minutes; "Run Backtest" button forces refresh
+- "← Live Dashboard" nav link; "Backtest" nav link on main dashboard
+
+**API additions to `/api/state`:**
+- `regime` per pair (live OHLC → `detect_market_regime`)
+- `cot_bias` per pair (`CotBias.get_bias`)
+- `last_signal` per pair (most recent signal from DB)
+- `trade_stats` (win rate, PF, avg win/loss across all closed trades)
+- `today_pnl` (realised PnL since UTC midnight)
+- `news_active` (boolean: is engine currently paused for news)
+- `next_event` (ISO datetime of next scheduled high-impact event)
+
+**New API endpoint `/api/backtest`:**
+- Runs `run_backtest()` for all 4 pairs, baseline and hybrid
+- Downsamples equity curves for fast transfer
+- Adds timestamps to trades (bar index → actual bar datetime)
+- Caches 5 minutes
+
+---
+
+## Pending Issues (Low Priority)
+
+| # | Issue | File | Priority |
+|---|-------|------|----------|
+| B7 | `upsert_ohlc` return value counts attempted rows not inserted | `core/db.py` | LOW |
+| B8 | Equity table grows forever (~960 rows/day) | `core/db.py` | LOW |
+| Q6 | Backtester has no spread/slippage model — returns slightly optimistic | `backtest.py` | MEDIUM |
+| Q7 | Backtester only fetches page 1 from IG — max ~1000 bars with `--fetch` | `backtest.py` | MEDIUM |
+| M6 | No SQLite backup mechanism | ops | LOW |
+| M7 | Pip values for USDCHF/GBPJPY are hardcoded approximations (5–10% off) | `core/config.py` | LOW |
+
+---
+
+## Upcoming Steps
+
+### Step 13 — Alerts / Notifications
+**Priority: High** — currently no way to know a trade fired without watching logs.
+
+- Telegram bot message when trade opens/closes (deal reference, pair, direction, size, entry, stop, target)
+- Telegram alert when daily loss limit hit
+- Telegram alert when engine crashes / stops unexpectedly
+- Optional: email fallback if Telegram not configured
+- Implementation: `data/notifier.py` — `send_alert(msg)` with Telegram `requests.post` to Bot API
+- Engine calls `send_alert()` at: trade open, trade close, drawdown halt, auth failure
+- Config: `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` in `.env`
+
+### Step 14 — Daily Performance Report
+**Priority: Medium**
+
+- Automated daily summary generated at session close (16:00 UTC / 18:00 SAST)
+- Contents: trades taken today, daily PnL, running win rate, balance, drawdown
+- Delivered via Telegram or email
+- Optionally extend the dashboard with a `/performance` page showing weekly/monthly breakdown
+
+### Step 15 — Walk-Forward Validation
+**Priority: High (before real money)**
+
+Run the backtest across rolling time windows (e.g. 6 months in-sample, 1 month out-of-sample, step 1 month)
+to check whether the strategy parameters hold up out-of-sample.
+
+- Detect if current parameters are overfit to the cached training period
+- If out-of-sample performance degrades sharply vs in-sample → re-examine parameters
+- Requires pulling 2–3 years of OHLC data (need to bypass IG's 10,000 bar/day allowance or use a second data source)
+- Tools: extend `backtest.py` with `--walk-forward` flag
+
+### Step 16 — Live Account Migration Checklist
+**Priority: High (before going live)**
+
+Before switching `IG_DEMO=false`:
+- [ ] Run backtest with minimum 500+ trades per pair (needs more OHLC data)
+- [ ] Confirm walk-forward results acceptable (Step 15)
+- [ ] Verify all 116 tests pass on live config
+- [ ] Set initial live risk lower: `RISK_PER_TRADE=0.005` (0.5%) for first 2 weeks
+- [ ] Set `HARD_DRAWDOWN=0.05` (5%) for live account (tighter than demo 8%)
+- [ ] Create a separate live DB (`data/forex_engine_live.db`) — never share with demo
+- [ ] Verify `amend_stop` price scaling works correctly on live prices
+- [ ] Confirm Telegram alerts (Step 13) are working before going live
+- [ ] Have a manual kill-switch procedure documented
+
+### Step 17 — Backtester Improvements
+**Priority: Medium**
+
+- Add 2-pip spread cost per round-trip to `_pnl()` — makes returns realistic
+- Multi-page OHLC fetch to get 3000+ bars (currently capped at ~1000 from IG)
+- Sharpe ratio calculation (annualised, risk-free rate = 0)
+- Per-strategy breakdown in stats (MR vs TF contribution)
+- Walk-forward mode (see Step 15)
 
 ---
 
@@ -190,18 +251,19 @@ Prevents `ATTACHED_ORDER_LEVEL_ERROR` caused by market moving between quote and 
 ### Fix 4 — Real Account Balance
 `get_account_balance()` fetches live balance from IG `GET /accounts`.
 Replaces hardcoded `INITIAL_BALANCE` on startup and refreshes every loop.
-Both `EquityGuard` and `DailyLossGuard` stay in sync with actual account.
 
 ### Fix 5 — IG Minimum Stop Distance Guard
 Added guard in `engine.py` after signal recalculation:
 - Reads `min_stop_pips` from live quote
-- If stop is closer than IG minimum, widens stop to `min_stop_pips × MIN_STOP_BUFFER`
+- Widens stop to `min_stop_pips × MIN_STOP_BUFFER (1.1)` if too close
 - Adjusts target to maintain 2:1 R/R
-- Logs the widening for visibility
 
 ### Fix 6 — All Hardcoded Values → config.py
 28+ magic numbers removed from `engine.py`, `risk/guard.py`, `core/ig_client.py`.
-Every tunable parameter is now a named constant in `core/config.py`.
+
+### Fix B6 — amend_stop Price Scale (applied in Step 11)
+`amend_stop()` now sends `raw_stop = round(new_stop * price_scale, decimals)`.
+EUR/USD: sends 11450 not 1.1450. Other pairs unaffected (price_scale=1).
 
 ---
 
@@ -209,8 +271,10 @@ Every tunable parameter is now a named constant in `core/config.py`.
 
 **File:** `test_all.py`
 **Run:** `python test_all.py`
-**Coverage:** 79 tests across all steps + pre-existing fixes
-**Pass condition:** All 79 tests pass before merging any change.
+**Coverage:** 116 tests across Steps 1–12
+**Pass condition:** All 116 tests pass before merging any change.
+
+Last run: 2026-03-24 — 116/116 PASSED
 
 ---
 
@@ -220,55 +284,31 @@ All changes applied on 2026-03-24 based on best-practices comparison vs industry
 
 | Parameter | Original | Changed To | Reason |
 |-----------|----------|------------|--------|
-| `MR_RSI_OVERSOLD` | 35.0 | **30.0** | Standard oversold threshold. 35 fired too often on shallow dips, reducing signal quality. |
-| `MR_RSI_OVERBOUGHT` | 65.0 | **70.0** | Standard overbought threshold. 65 fired on minor retracements; 70 is higher-conviction. |
-| `MR_STOP_ATR_MULT` | 0.8 | **1.5** | 0.8×ATR stop was inside the noise band — frequently stopped out before trade developed. 1.5×ATR is the minimum viable stop for 1h forex. |
-| `MR_TARGET_ATR_MULT` | 1.6 | **3.0** | Adjusted to maintain 2:1 R/R with new stop. 3.0 / 1.5 = 2:1 exactly. Previous 1.6/0.8 was also 2:1 but at too tight a distance. |
-| `TF_FAST_EMA_PERIOD` | 9 | **12** | 12/26 is the canonical MACD pair — backtested extensively across forex. More reliable than 9/21 for 1h bars. |
-| `TF_SLOW_EMA_PERIOD` | 21 | **26** | Paired with fast=12. The 9/21 combo is less proven; 12/26 has decades of empirical support. |
-| `TF_STOP_ATR_MULT` | 0.8 | **2.0** | Trend trades need more room. 0.8×ATR for a trend trade guarantees noise stop-outs. 2×ATR is the standard for trend-following systems. |
-| `TF_TARGET_ATR_MULT` | 1.6 | **4.0** | 4.0 / 2.0 = 2:1 R/R. Trend trades should run further than mean reversion trades; 4×ATR allows the trend to develop. |
-| `SOFT_DRAWDOWN` | 0.02 (2%) | **0.04 (4%)** | 2% soft drawdown triggered risk scaling too aggressively — normal intraday variance could hit it. 4% is the standard soft floor. |
-| `HARD_DRAWDOWN` | 0.04 (4%) | **0.08 (8%)** | 4% halt was extremely conservative — professional prop desks use 8–10% as the halt threshold. Prevented recovery from normal losing streaks. |
-| `TRAILING_ATR_MULT` | 0.8 | **1.2** | 0.8×ATR trailing stop was too tight — prematurely closed winning trend trades. 1.2×ATR gives room while still locking in gains. |
-| `REGIME_ATR_SPIKE_MULT` | 1.5 | **2.0** | 1.5× baseline ATR paused trading on routine volatility spikes. 2.0× only triggers on genuine volatility events (news, flash crashes). |
-| `HISTORY_BARS` | 500 | **1000** | 500×1h ≈ 21 days of history. ADX and ATR need sufficient warm-up; 1000 bars ≈ 42 days gives much better indicator initialisation. |
-
-### Parameters Left Unchanged (Already Within Best Practice)
-
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| `RISK_PER_TRADE` | 1% | Textbook retail forex risk per trade |
-| `DAILY_LOSS_LIMIT` | 3% | Industry standard daily circuit breaker |
-| `MAX_SPREAD_PIPS` | 2.0 | Conservative; protects against wide spreads |
-| `MR_RSI_PERIOD` | 14 | Standard RSI period |
-| `MR_ATR_PERIOD` | 14 | Standard ATR period |
-| `TF_ATR_PERIOD` | 14 | Standard ATR period |
-| `REGIME_ADX_PERIOD` | 14 | Standard Wilder ADX period |
-| `REGIME_ADX_THRESHOLD` | 25.0 | Classic ADX trending threshold |
-| `REGIME_ATR_PERIOD` | 14 | Standard |
-| `REGIME_ATR_SPIKE_WINDOW` | 20 | Reasonable baseline window |
-| `MIN_STOP_BUFFER` | 1.1 | 10% above IG minimum — sensible safety margin |
-| `RISK_MIN_SCALE` | 0.25 | Scale to 25% risk at soft drawdown — standard |
-| `RISK_DD_REDUCTION` | 0.75 | Linear reduction factor — standard |
-| `SESSION_START_UTC` | 12:00 | London/NY overlap start (14:00 SAST) |
-| `SESSION_END_UTC` | 16:00 | London/NY overlap end (18:00 SAST) |
-| `MR_VWAP_WINDOW` | 20 | Standard VWAP window |
-| `ENGINE_TRAILING_ATR_PERIOD` | 14 | Standard |
-| `IG_REQUEST_TIMEOUT_SEC` | 15 | Reasonable HTTP timeout |
-| `QUOTE_INTERVAL_SEC` | 15 | 4 pairs × 4/min = safe within IG rate limits |
-| `ENGINE_STAGGER_SEC` | 2 | Avoids IG rate limit burst |
+| `MR_RSI_OVERSOLD` | 35.0 | **30.0** | Standard oversold threshold. 35 fired too often on shallow dips. |
+| `MR_RSI_OVERBOUGHT` | 65.0 | **70.0** | Standard overbought. 65 fired on minor retracements. |
+| `MR_STOP_ATR_MULT` | 0.8 | **1.5** | 0.8×ATR stop was inside the noise band. 1.5×ATR is minimum viable for 1h forex. |
+| `MR_TARGET_ATR_MULT` | 1.6 | **3.0** | Maintains 2:1 R/R with new stop. |
+| `TF_FAST_EMA_PERIOD` | 9 | **12** | 12/26 is the canonical MACD pair — decades of empirical support. |
+| `TF_SLOW_EMA_PERIOD` | 21 | **26** | Paired with fast=12. |
+| `TF_STOP_ATR_MULT` | 0.8 | **2.0** | Trend trades need room. 2×ATR is standard for trend-following. |
+| `TF_TARGET_ATR_MULT` | 1.6 | **4.0** | 4/2 = 2:1 R/R. Allows trend to develop. |
+| `SOFT_DRAWDOWN` | 0.02 | **0.04** | 2% triggered too aggressively on normal intraday variance. |
+| `HARD_DRAWDOWN` | 0.04 | **0.08** | 4% halt too conservative. 8% is industry standard. |
+| `TRAILING_ATR_MULT` | 0.8 | **1.2** | 0.8×ATR trailing stop closed winners too early. |
+| `REGIME_ATR_SPIKE_MULT` | 1.5 | **2.0** | 1.5× paused on routine spikes. 2.0× only triggers on genuine events. |
+| `HISTORY_BARS` | 500 | **1000** | 500 bars ≈ 21 days. 1000 bars ≈ 42 days — better indicator warm-up. |
+| `RISK_PER_TRADE` | 0.005 | **0.01** | Increased to 1% (still conservative; industry standard for funded accounts). |
 
 ---
 
 ## IG-Imposed Constraints (Not Tunable)
 
-These are enforced by IG and cannot be changed:
-- **Minimum deal size**: 1 contract (Fix 3 handles this with `math.ceil`)
-- **Minimum stop distance**: Per-instrument, read from `dealingRules.minNormalStopOrLimitDistance` (Fix 5 handles this with the stop widening guard)
-- **Order type**: MARKET for instant fill; LIMIT/STOP available but not used
-- **Stop/limit format on new orders**: Must use `stopDistance`/`limitDistance` in pips (Fix 2)
-- **Stop/limit format on amendments**: Must use absolute `stopLevel` (Fix 2 note in `amend_stop`)
+- **Minimum deal size**: 1 contract (Fix 3 handles with `math.ceil`)
+- **Minimum stop distance**: Per-instrument, read from `dealingRules.minNormalStopOrLimitDistance` (Fix 5)
+- **Order type**: MARKET for instant fill
+- **Stop/limit on new orders**: `stopDistance`/`limitDistance` in pips (Fix 2)
+- **Stop/limit on amendments**: Absolute `stopLevel` (Fix B6)
+- **Daily OHLC data allowance**: Limited on demo — 403 errors after heavy seeding; resets midnight UTC
 
 ---
 
@@ -281,7 +321,11 @@ These are enforced by IG and cannot be changed:
 | USD/CHF | CS.D.USDCHF.CFD.IP | 1 | 0.0001 | $12.50 |
 | GBP/JPY | CS.D.GBPJPY.CFD.IP | 1 | 0.01 | $6.30 |
 
-All four pairs update in the dashboard. GBP/JPY appears when the dashboard restarts.
+Min stop distances (from IG dealingRules as of 2026-03-24):
+- EUR/USD: 6.0 POINTS
+- GBP/USD: 12.0 POINTS
+- USD/CHF: 4.0 POINTS
+- GBP/JPY: 4.0 POINTS
 
 ---
 
@@ -289,24 +333,55 @@ All four pairs update in the dashboard. GBP/JPY appears when the dashboard resta
 
 ```
 forex-engine/
-  engine.py                        — main loop, strategy switcher, risk wiring
+  engine.py                        — main loop, strategy switcher, all risk gates wired
+  backtest.py                      — vectorised backtester (baseline vs hybrid)
+  test_all.py                      — master test suite (116 tests)
   core/
     config.py                      — ALL parameters (edit here only)
-    db.py                          — SQLite helpers
+    db.py                          — SQLite helpers (all tables + queries)
     ig_client.py                   — IG REST API wrapper
   strategy/
+    indicators.py                  — shared atr(), rsi() (used by all strategy modules)
     mean_reversion.py              — original strategy (unchanged logic)
-    trend_following.py             — [NEW Step 3] EMA crossover strategy
-    regime_detection.py            — [NEW Step 2] ADX+ATR regime classifier
+    trend_following.py             — EMA crossover strategy
+    regime_detection.py            — ADX+ATR regime classifier
+    mtf_filter.py                  — 5m confirmation filter
+    cot_bias.py                    — COT 52-week index bias filter
   risk/
     guard.py                       — SessionGate, SpreadFilter, PositionSizer,
-                                     EquityGuard, DailyLossGuard, TrailingStopManager
+                                     EquityGuard, DailyLossGuard, TrailingStopManager,
+                                     CorrelationGuard
   data/
-    fetcher.py                     — fetch_live_quote, seed_history
+    fetcher.py                     — fetch_live_quote, seed_history, refresh_bars
+    cot_fetcher.py                 — CFTC COT downloader + parser
+    news_filter.py                 — news event cache, central bank scraper, is_news_window
+    news_events.json               — auto-generated by scraper (FOMC/BOE/ECB dates)
   execution/
     gateway.py                     — ExecutionGateway, submit()
-  backtest.py                      — [NEW Step 6] vectorised backtester
-  test_all.py                      — master test suite (43 tests)
+  dashboard/
+    app.py                         — FastAPI backend (/api/state, /api/backtest)
+    static/
+      index.html                   — live dashboard (quotes, filters, equity, positions)
+      backtest.html                — backtesting page (stats, curves, trade log)
+  logs/
+    engine.log                     — rotating file log (5MB × 3)
+    alerts.log                     — auth failures + hard drawdown events
+  data/
+    forex_engine.db                — SQLite (trades, signals, equity, OHLC, COT, quotes)
   memory/
     project_upgrade_roadmap.md     — this file
 ```
+
+---
+
+## Current Engine Status (2026-03-24)
+
+- **Mode:** LIVE ORDERS on IG DEMO account Z69JGB
+- **Balance:** $20,272.00
+- **Session:** 12:00–16:00 UTC (14:00–18:00 SAST)
+- **COT data:** 208 rows (2025) + 44 rows (2026) loaded for all 4 pairs
+- **News events:** 29 events loaded (NFP + 26 central bank)
+- **OHLC:** 473 hourly + 500+ 5m bars cached per pair
+- **Tests:** 116/116 passing
+- **Known issue:** IG demo data allowance exhausted today from repeated restarts — clears midnight UTC. Engine trades normally on cached OHLC.
+- **Next action:** Tomorrow run `python backtest.py --fetch --bars 3000` for a proper backtest with 100+ trades per pair.
