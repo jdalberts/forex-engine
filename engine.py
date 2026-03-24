@@ -26,6 +26,7 @@ from data.cot_fetcher import refresh_cot, seed_cot                      # [NEW �
 from data.fetcher import fetch_live_quote, refresh_bars, seed_history   # [NEW — Step 8]
 from data.news_filter import (is_news_window, refresh_news_cache,        # [NEW — Step 11]
                               refresh_central_bank_calendar)
+from data.notifier import send_alert                                     # [NEW — Step 13]
 from execution.gateway import ExecutionGateway
 from risk.guard import (CorrelationGuard, DailyLossGuard, EquityGuard,    # [NEW — Step 7A]
                         PositionSizer, SessionGate, SpreadFilter,         # [NEW — Step 5]
@@ -124,6 +125,11 @@ def run(dry_run: bool = True) -> None:
     if not client.authenticate():
         log.error("IG authentication failed — check .env credentials")
         _alert("IG authentication failed on startup — engine did not start")   # [NEW — Step 9]
+        send_alert(                                                             # [NEW — Step 13]
+            "🚨 ENGINE ALERT\n"
+            "IG authentication failed — engine did not start\n"
+            "Check .env credentials"
+        )
         return
 
     # ── Sync: close DB trades that IG already closed ──────────────────────────
@@ -187,6 +193,7 @@ def run(dry_run: bool = True) -> None:
     _last_position_sync = 0.0              # [NEW — Step 8]
     _last_cot_refresh   = time.monotonic() # [NEW — Step 10] seed already ran; don't re-download immediately
     _last_news_refresh  = 0.0              # [NEW — Step 11]
+    _daily_loss_alerted: set = set()       # [NEW — Step 13] dates already alerted to avoid repeat spam
 
     # ── Main loop ─────────────────────────────────────────────────────────────
     while _running:
@@ -201,6 +208,11 @@ def run(dry_run: bool = True) -> None:
             daily_guard.update_balance(live_balance)
             if equity_guard.halted and not _was_halted:                    # [NEW — Step 9]
                 _alert(f"HARD DRAWDOWN halt triggered — balance ${live_balance:.2f}")
+                send_alert(                                                 # [NEW — Step 13]
+                    f"🚨 HARD DRAWDOWN HALT\n"
+                    f"Balance: ${live_balance:.2f}\n"
+                    f"All trading suspended — manual review required"
+                )
 
         _now_mono = time.monotonic()                                         # [NEW — Step 8]
 
@@ -246,6 +258,10 @@ def run(dry_run: bool = True) -> None:
                                    exit_price=_mid, pnl=_pnl)
                     log.info("[%s] Mid-session sync: IG closed position — DB updated  pnl=%.2f",
                              _sym, _pnl)
+                    send_alert(                                             # [NEW — Step 13]
+                        f"🔴 TRADE CLOSED\n"
+                        f"{_sym}  |  est. P&L: ${_pnl:+.2f}"
+                    )
             _last_position_sync = _now_mono
 
 
@@ -279,6 +295,15 @@ def run(dry_run: bool = True) -> None:
 
             # 4. [NEW — Step 5] Daily loss limit — pause all new trades for today
             if not daily_guard.allow_trade():
+                _today_str = now.strftime("%Y-%m-%d")           # [NEW — Step 13]
+                if _today_str not in _daily_loss_alerted:       # [NEW — Step 13] alert once per day
+                    _dpnl = db.daily_pnl(config.DB_PATH)
+                    send_alert(
+                        f"⚠️ DAILY LOSS LIMIT\n"
+                        f"Today's P&L: ${_dpnl:.2f}\n"
+                        f"No new trades until tomorrow UTC"
+                    )
+                    _daily_loss_alerted.add(_today_str)
                 log.info("[%s] Daily loss limit active — skipping", symbol)
                 continue
 
@@ -386,11 +411,23 @@ def run(dry_run: bool = True) -> None:
 
                 signal_id               = db.insert_signal(config.DB_PATH, signal_data)
                 signal_data["id"]       = signal_id
-                gateway.submit(signal_data)
+                _trade_id = gateway.submit(signal_data)
+                if _trade_id:                                               # [NEW — Step 13]
+                    _sp = round(abs(signal_data["entry"] - signal_data["stop"])   / signal_data["pip_size"])
+                    _tp = round(abs(signal_data["target"] - signal_data["entry"]) / signal_data["pip_size"])
+                    send_alert(
+                        f"🟢 TRADE OPEN\n"
+                        f"{symbol} {signal_data['direction'].upper()}\n"
+                        f"Entry: {signal_data['entry']:.5f}  |  "
+                        f"Stop: {signal_data['stop']:.5f}  |  "
+                        f"Target: {signal_data['target']:.5f}\n"
+                        f"Stop: {_sp}p  |  Target: {_tp}p"
+                    )
 
         time.sleep(config.QUOTE_INTERVAL_SEC)
 
     log.info("Engine stopped.")
+    send_alert("🛑 Engine stopped (normal shutdown)")                      # [NEW — Step 13]
 
 
 if __name__ == "__main__":
@@ -402,4 +439,14 @@ if __name__ == "__main__":
         help="Submit real orders to IG (default: dry run)",
     )
     args = parser.parse_args()
-    run(dry_run=not args.live)
+    try:                                                                    # [NEW — Step 13]
+        run(dry_run=not args.live)
+    except Exception as _exc:                                              # [NEW — Step 13]
+        log.exception("Engine crashed: %s", _exc)
+        _alert(f"Engine crashed: {_exc}")
+        send_alert(
+            f"🚨 ENGINE CRASHED\n"
+            f"{type(_exc).__name__}: {_exc}\n"
+            f"Engine has stopped — restart required"
+        )
+        raise

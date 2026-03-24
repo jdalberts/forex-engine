@@ -127,3 +127,8 @@ COT_LONG_THRESHOLD: float     = 0.2   # index below this → specs extremely sho
 COT_SHORT_THRESHOLD: float    = 0.8   # index above this → specs extremely long  → bias SHORT
 COT_WEEKS_HISTORY: int        = 52    # rolling window for min/max normalisation
 COT_REFRESH_INTERVAL_SEC: int = 3600  # re-download current year file every hour
+
+# ── Telegram Alerts [NEW — Step 13] ──────────────────────────────────────────
+TELEGRAM_TOKEN:   str  = os.environ.get("TELEGRAM_TOKEN",   "")
+TELEGRAM_CHAT_ID: str  = os.environ.get("TELEGRAM_CHAT_ID", "")
+TELEGRAM_ENABLED: bool = bool(TELEGRAM_TOKEN and TELEGRAM_CHAT_ID)

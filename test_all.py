@@ -891,6 +891,60 @@ _s11_results = [r for r in results if r[0].startswith("step11:")]
 _s11_pass = sum(1 for _, s in _s11_results if s == PASS)
 print(f"\nStep 11: {_s11_pass}/{len(_s11_results)} passed")
 
+# ── Step 13: Telegram Notifier ─────────────────────────────────────────────────
+print("\n--- Step 13: Telegram Notifier ---")
+
+from unittest.mock import patch as _patch13, MagicMock as _MM13
+from data.notifier import send_alert as _send_alert13
+from core import config as _cfg13
+
+# send_alert returns False when token is empty (not configured)
+with _patch13.object(_cfg13, "TELEGRAM_TOKEN", ""), \
+     _patch13.object(_cfg13, "TELEGRAM_CHAT_ID", ""):
+    check("step13: send_alert returns False when not configured",
+          _send_alert13("test") is False)
+
+# send_alert returns False when chat_id is empty
+with _patch13.object(_cfg13, "TELEGRAM_TOKEN", "token123"), \
+     _patch13.object(_cfg13, "TELEGRAM_CHAT_ID", ""):
+    check("step13: send_alert returns False when chat_id missing",
+          _send_alert13("test") is False)
+
+# send_alert returns True on HTTP 200
+_mock_resp_ok = _MM13()
+_mock_resp_ok.status_code = 200
+with _patch13.object(_cfg13, "TELEGRAM_TOKEN", "tok"), \
+     _patch13.object(_cfg13, "TELEGRAM_CHAT_ID", "123"), \
+     _patch13("data.notifier.requests.post", return_value=_mock_resp_ok):
+    check("step13: send_alert returns True on HTTP 200",
+          _send_alert13("hello") is True)
+
+# send_alert returns False on non-200 HTTP
+_mock_resp_fail = _MM13()
+_mock_resp_fail.status_code = 401
+_mock_resp_fail.text = "Unauthorized"
+with _patch13.object(_cfg13, "TELEGRAM_TOKEN", "tok"), \
+     _patch13.object(_cfg13, "TELEGRAM_CHAT_ID", "123"), \
+     _patch13("data.notifier.requests.post", return_value=_mock_resp_fail):
+    check("step13: send_alert returns False on HTTP 401",
+          _send_alert13("hello") is False)
+
+# send_alert returns False on network error (exception)
+with _patch13.object(_cfg13, "TELEGRAM_TOKEN", "tok"), \
+     _patch13.object(_cfg13, "TELEGRAM_CHAT_ID", "123"), \
+     _patch13("data.notifier.requests.post", side_effect=ConnectionError("timeout")):
+    check("step13: send_alert returns False on network error",
+          _send_alert13("hello") is False)
+
+# Config constants present
+check("step13: TELEGRAM_TOKEN in config",   hasattr(_cfg13, "TELEGRAM_TOKEN"))
+check("step13: TELEGRAM_CHAT_ID in config", hasattr(_cfg13, "TELEGRAM_CHAT_ID"))
+check("step13: TELEGRAM_ENABLED in config", hasattr(_cfg13, "TELEGRAM_ENABLED"))
+
+_s13_results = [r for r in results if r[0].startswith("step13:")]
+_s13_pass = sum(1 for _, s in _s13_results if s == PASS)
+print(f"\nStep 13: {_s13_pass}/{len(_s13_results)} passed")
+
 # ── Final summary (re-print with new tests) ────────────────────────────────────
 total   = len(results)
 passed  = sum(1 for _, s in results if s == PASS)
