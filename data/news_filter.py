@@ -212,8 +212,10 @@ def refresh_news_cache(now: Optional[datetime] = None) -> None:
 
     _event_cache = events
     _cache_date  = today
-    log.info("News cache refreshed: %d events loaded (FMP key: %s)",
-             len(events), "yes" if config.FMP_API_KEY else "no — NFP only")
+    log.info("News cache refreshed: %d events loaded (NFP built-in + %s custom + FMP: %s)",
+             len(events),
+             len(_load_custom_events(config.NEWS_EVENTS_FILE)),
+             "active" if config.FMP_API_KEY else "no key — requires paid plan")
 
 
 # ── Main gate ─────────────────────────────────────────────────────────────────
