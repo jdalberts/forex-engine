@@ -52,8 +52,11 @@ def _rsi(series: pd.Series, period: int = RSI_PERIOD) -> pd.Series:
 
 
 def _vwap(df: pd.DataFrame, window: int = VWAP_WINDOW) -> pd.Series:
-    tp      = (df["high"] + df["low"] + df["close"]) / 3
-    vol     = df.get("volume", pd.Series(1.0, index=df.index))
+    tp  = (df["high"] + df["low"] + df["close"]) / 3
+    vol = df.get("volume", pd.Series(1.0, index=df.index))
+    # FX data (Yahoo Finance, IG CFD) has zero volume — use uniform weighting
+    # so VWAP degrades gracefully to a rolling average price.
+    vol = vol.where(vol > 0, 1.0)
     cum_tpv = (tp * vol).rolling(window).sum()
     cum_v   = vol.rolling(window).sum().replace(0, np.nan)
     return (cum_tpv / cum_v).bfill()

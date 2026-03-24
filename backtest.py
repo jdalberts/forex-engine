@@ -18,8 +18,9 @@ Assumptions / simplifications:
 Usage (PowerShell from project root):
     python backtest.py                      # use DB data (must have run engine first)
     python backtest.py --fetch              # fetch fresh bars from IG before running
+    python backtest.py --yahoo              # fetch ~2 years of bars from Yahoo Finance (free)
     python backtest.py --symbol EURUSD      # single pair (default: all configured pairs)
-    python backtest.py --bars 3000          # bars to fetch per pair (default: 3000)
+    python backtest.py --bars 3000          # bars to fetch per pair (default: 1500 for Yahoo)
     python backtest.py --balance 20000      # override starting balance
 """
 
@@ -284,8 +285,9 @@ def compute_stats(result: dict) -> dict:
     final   = result["final_balance"]
 
     if not trades:
-        return {"total_trades": 0, "win_rate": 0, "total_return_pct": 0,
-                "max_drawdown_pct": 0, "profit_factor": 0, "final_balance": round(final, 2)}
+        return {"total_trades": 0, "wins": 0, "losses": 0, "win_rate": 0,
+                "total_return_pct": 0, "max_drawdown_pct": 0,
+                "profit_factor": 0, "final_balance": round(final, 2)}
 
     wins   = [t for t in trades if t["result"] == "win"]
     losses = [t for t in trades if t["result"] == "stop"]
@@ -359,6 +361,19 @@ def _load_from_db(symbol: str, min_bars: int = 200) -> list[dict]:
     return bars
 
 
+def _fetch_from_yahoo(symbol: str, max_bars: int = 1500) -> list[dict]:    # [NEW — Step 17]
+    """Fetch hourly OHLC bars from Yahoo Finance (free, no API key, ~2 years)."""
+    try:
+        from data.yahoo_fetcher import fetch_yahoo_bars
+        bars = fetch_yahoo_bars(symbol, max_bars=max_bars)
+        if bars:
+            log.info("[%s] Yahoo Finance: %d bars fetched", symbol, len(bars))
+        return bars
+    except Exception as exc:
+        log.error("Yahoo fetch failed for %s: %s", symbol, exc)
+        return []
+
+
 def _fetch_from_ig(symbol: str, epic: str, price_scale: int,
                    max_bars: int = 3000) -> list[dict]:
     """Fetch fresh OHLC history from IG and cache it."""
@@ -394,20 +409,26 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Forex backtest — baseline vs hybrid")
     parser.add_argument("--fetch",   action="store_true", help="Fetch fresh bars from IG first")
+    parser.add_argument("--yahoo",   action="store_true", help="Fetch ~2yr bars from Yahoo Finance (free, no API key)")  # [NEW — Step 17]
     parser.add_argument("--symbol",  default=None,        help="Single pair, e.g. EURUSD")
-    parser.add_argument("--bars",    type=int, default=3000, help="Bars to fetch per pair")
+    parser.add_argument("--bars",    type=int, default=None, help="Bars to use per pair (default: 10000 for Yahoo, 3000 for IG)")
     parser.add_argument("--balance", type=float, default=config.INITIAL_BALANCE,
                         help="Starting balance for simulation")
     args = parser.parse_args()
+
+    # Set sensible default bar counts per source           [NEW — Step 17]
+    if args.bars is None:
+        args.bars = 10000 if args.yahoo else 3000   # Yahoo: grab all ~2yr; IG: 3000 max
 
     pairs = {args.symbol: config.PAIRS[args.symbol]} if args.symbol else config.PAIRS
     if args.symbol and args.symbol not in config.PAIRS:
         print(f"Unknown symbol '{args.symbol}'. Choices: {list(config.PAIRS)}")
         return
 
+    src = "Yahoo Finance" if args.yahoo else ("IG API" if args.fetch else "DB cache")  # [NEW — Step 17]
     print(f"\nFOREX BACKTEST  |  balance=${args.balance:,.0f}  |  {datetime.now():%Y-%m-%d %H:%M}")
     print(f"Strategies: Mean Reversion (baseline)  vs  Hybrid (regime-switching)")
-    print(f"Note: trailing stop not simulated — hybrid results are conservative\n")
+    print(f"Data source: {src}  |  Note: trailing stop not simulated — hybrid results are conservative\n")
 
     all_baseline = []
     all_hybrid   = []
@@ -415,7 +436,9 @@ def main() -> None:
     for symbol, pcfg in pairs.items():
         print(f"Loading {symbol}...", end=" ", flush=True)
 
-        if args.fetch:
+        if args.yahoo:                                                         # [NEW — Step 17]
+            bars = _fetch_from_yahoo(symbol, max_bars=args.bars)
+        elif args.fetch:
             bars = _fetch_from_ig(symbol, pcfg["epic"], pcfg.get("price_scale", 1), args.bars)
         else:
             bars = _load_from_db(symbol)

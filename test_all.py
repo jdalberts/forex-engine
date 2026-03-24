@@ -1021,6 +1021,64 @@ _s14_results = [r for r in results if r[0].startswith("step14:")]
 _s14_pass = sum(1 for _, s in _s14_results if s == PASS)
 print(f"\nStep 14: {_s14_pass}/{len(_s14_results)} passed")
 
+# ── Step 17: Yahoo Finance Fetcher ────────────────────────────────────────────
+print("\n--- Step 17: Yahoo Finance Fetcher ---")
+
+from unittest.mock import patch as _patch17, MagicMock as _MM17
+import pandas as _pd17
+from data.yahoo_fetcher import fetch_yahoo_bars as _fyb17, YAHOO_TICKERS as _YT17
+
+# Ticker map has all 4 pairs
+check("step17: EURUSD ticker mapped", "EURUSD" in _YT17)
+check("step17: GBPUSD ticker mapped", "GBPUSD" in _YT17)
+check("step17: USDCHF ticker mapped", "USDCHF" in _YT17)
+check("step17: GBPJPY ticker mapped", "GBPJPY" in _YT17)
+
+# Unknown symbol returns []
+check("step17: unknown symbol returns []", _fyb17("XYZABC") == [])
+
+# Successful download returns correctly formatted bars
+_idx17 = _pd17.date_range("2025-01-02 10:00", periods=5, freq="1h", tz="UTC")
+_mock_df17 = _pd17.DataFrame({
+    "Open":  [1.10, 1.11, 1.12, 1.11, 1.10],
+    "High":  [1.11, 1.12, 1.13, 1.12, 1.11],
+    "Low":   [1.09, 1.10, 1.11, 1.10, 1.09],
+    "Close": [1.10, 1.11, 1.12, 1.11, 1.10],
+    "Volume":[0, 0, 0, 0, 0],
+}, index=_idx17)
+
+with _patch17("data.yahoo_fetcher.yf.download", return_value=_mock_df17):
+    _bars17 = _fyb17("EURUSD", max_bars=1500)
+
+check("step17: returns list of dicts",       isinstance(_bars17, list) and len(_bars17) == 5)
+check("step17: bar has 'time' key",          "time" in _bars17[0])
+check("step17: bar has 'close' key",         "close" in _bars17[0])
+check("step17: bar has 'volume' key",        "volume" in _bars17[0])
+check("step17: time is string",              isinstance(_bars17[0]["time"], str))
+check("step17: close is float",              isinstance(_bars17[0]["close"], float))
+
+# Empty DataFrame returns []
+with _patch17("data.yahoo_fetcher.yf.download", return_value=_pd17.DataFrame()):
+    check("step17: empty DataFrame returns []", _fyb17("EURUSD") == [])
+
+# Exception returns []
+with _patch17("data.yahoo_fetcher.yf.download", side_effect=Exception("network error")):
+    check("step17: exception returns []", _fyb17("EURUSD") == [])
+
+# max_bars cap works
+_long_idx17 = _pd17.date_range("2024-01-02 10:00", periods=2000, freq="1h", tz="UTC")
+_long_df17  = _pd17.DataFrame({
+    "Open": [1.10] * 2000, "High": [1.11] * 2000,
+    "Low":  [1.09] * 2000, "Close":[1.10] * 2000, "Volume":[0] * 2000,
+}, index=_long_idx17)
+with _patch17("data.yahoo_fetcher.yf.download", return_value=_long_df17):
+    _capped17 = _fyb17("EURUSD", max_bars=500)
+check("step17: max_bars cap applied", len(_capped17) == 500)
+
+_s17_results = [r for r in results if r[0].startswith("step17:")]
+_s17_pass = sum(1 for _, s in _s17_results if s == PASS)
+print(f"\nStep 17: {_s17_pass}/{len(_s17_results)} passed")
+
 # ── Final summary (re-print with new tests) ────────────────────────────────────
 total   = len(results)
 passed  = sum(1 for _, s in results if s == PASS)
