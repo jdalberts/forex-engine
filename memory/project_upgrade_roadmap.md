@@ -127,6 +127,7 @@ Rounding: 1 dp if price_scale > 1, 5 dp otherwise.
 **Tests:** 17 new tests; total 116/116 passing
 
 ### Step 12 — Dashboard v2 + Backtesting Page ✅ DONE
+
 **Files:** `dashboard/app.py`, `dashboard/static/index.html`, `dashboard/static/backtest.html` (new)
 
 **Dashboard v2 additions (live dashboard at `/`):**
@@ -162,6 +163,86 @@ Rounding: 1 dp if price_scale > 1, 5 dp otherwise.
 - Downsamples equity curves for fast transfer
 - Adds timestamps to trades (bar index → actual bar datetime)
 - Caches 5 minutes
+
+### Step 13 — Telegram Alerts ✅ DONE
+**Files:** `data/notifier.py` (new), `core/config.py`, `engine.py`
+
+Real-time Telegram notifications — never raises, silently no-ops if unconfigured.
+
+**Alert triggers:**
+- ✅ Engine started — pairs, mode (DRY RUN / LIVE), session window, live balance
+- 📈/📉 Trade open — pair, direction, entry/stop/target
+- 🔴 Trade closed — pair + estimated P&L (mid-session sync)
+- ⚠️ Daily loss limit hit — once per day (deduplicated to avoid spam)
+- 🚨 Hard drawdown halt — balance + halt message
+- 🚨 Auth failure on startup
+- 🚨 Engine crash — exception type + restart prompt
+- 🛑 Normal stop — clean shutdown
+
+**Setup:** Add to `.env`:
+```
+TELEGRAM_TOKEN=<bot token from @BotFather>
+TELEGRAM_CHAT_ID=<your numeric chat ID>
+```
+Find chat_id: message your bot → `https://api.telegram.org/bot<TOKEN>/getUpdates`
+
+**Config:** `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_ENABLED`
+**Tests:** 8 new tests; total 124/124 passing
+
+---
+
+### Step 14 — Daily Performance Report ✅ DONE
+**Files:** `data/reporter.py` (new), `core/db.py`, `engine.py`
+
+Automated daily summary sent via Telegram after session close (16:00 UTC / 18:00 SAST).
+
+**Contents:** trades today (wins/losses), today P&L, running win rate, account balance, drawdown vs initial.
+
+**DB additions:** `today_closed_trades()`, `all_time_stats()` in `core/db.py`.
+
+**Trigger:** fires once per day when `now.time() >= SESSION_END_UTC` and date has not already been reported.
+
+---
+
+### Step 17 — Yahoo Finance Historical Data ✅ DONE
+**Files:** `data/yahoo_fetcher.py` (new), `backtest.py`, `requirements.txt`
+
+Free 2-year hourly FX data for backtesting — no IG quota consumed.
+
+**Usage:**
+```
+python backtest.py --yahoo              # all 4 pairs, ~2yr data
+python backtest.py --yahoo --symbol EURUSD
+```
+
+**Backtest enhancements added alongside:**
+- Session filter: only generates signals during 12:00–16:00 UTC (matches live engine)
+- 2-pip round-trip spread cost deducted from every trade P&L
+- `--bars` defaults to all available bars (10,000) for Yahoo, 1,500 for IG
+
+**Results (EURUSD, 2yr Yahoo, with BB — Step 18):**
+- Mean reversion: 115 trades, 26.1% win rate, +3.9% return
+- Note: backtester does NOT model MTF/COT/news filters → live win rate should be higher
+
+---
+
+### Step 18 — Bollinger Bands Mean Reversion Upgrade ✅ DONE
+**Files:** `core/config.py`, `strategy/indicators.py`, `strategy/mean_reversion.py`, `backtest.py`, `test_all.py`
+
+Replaced VWAP with Bollinger Bands (±2σ) as the price-position filter in mean reversion.
+
+**Why:** With zero-volume FX data, VWAP degrades to a 20-bar rolling average — true ~50% of bars, barely filtering anything. BB ±2σ triggers only at genuine statistical extremes (~5% of bars), dramatically improving signal quality.
+
+**New signal logic:**
+- LONG:  `RSI < 30 AND close <= BB_lower`
+- SHORT: `RSI > 70 AND close >= BB_upper`
+
+**New config constants:** `MR_BB_PERIOD=20`, `MR_BB_STD_DEV=2.0`
+**New function:** `bollinger_bands(close, period, num_std)` in `strategy/indicators.py`
+**`_vwap` kept** — not removed, may be useful for reference.
+
+**Backtest improvement:** Win rate 21% → 26.1% (EURUSD, 2yr Yahoo data)
+**Tests:** 23 new tests; total 176/176 passing
 
 ---
 
@@ -208,46 +289,12 @@ Yahoo Finance backtest (18 months, session-filtered, 2pip spread) shows **~21% w
 |---|-------|------|----------|
 | B7 | `upsert_ohlc` return value counts attempted rows not inserted | `core/db.py` | LOW |
 | B8 | Equity table grows forever (~960 rows/day) | `core/db.py` | LOW |
-| Q6 | Backtester has no spread/slippage model — returns slightly optimistic | `backtest.py` | MEDIUM |
-| Q7 | Backtester only fetches page 1 from IG — max ~1000 bars with `--fetch` | `backtest.py` | MEDIUM |
 | M6 | No SQLite backup mechanism | ops | LOW |
 | M7 | Pip values for USDCHF/GBPJPY are hardcoded approximations (5–10% off) | `core/config.py` | LOW |
 
 ---
 
 ## Upcoming Steps
-
-### Step 13 — Alerts / Notifications ✅ DONE
-**Files:** `data/notifier.py` (new), `core/config.py`, `engine.py`
-
-Real-time Telegram notifications — never raises, silently no-ops if unconfigured.
-
-**Alert triggers:**
-- 🟢 Trade open — pair, direction, entry/stop/target, pip distances
-- 🔴 Trade closed — pair + estimated P&L (from mid-session sync)
-- ⚠️ Daily loss limit hit — once per day (deduplicated by date to avoid spam)
-- 🚨 Hard drawdown halt — balance + halt message
-- 🚨 Auth failure — if IG login fails on startup
-- 🚨 Engine crash — exception type/message + restart prompt
-- 🛑 Normal stop — clean shutdown confirmation
-
-**Setup:** Add to `.env`:
-```
-TELEGRAM_TOKEN=<bot token from @BotFather>
-TELEGRAM_CHAT_ID=<your chat ID>
-```
-Find your chat_id: message your bot → visit `https://api.telegram.org/bot<TOKEN>/getUpdates`
-
-**Config:** `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_ENABLED` (auto-set if both present)
-**Tests:** 8 new tests; total 124/124 passing
-
-### Step 14 — Daily Performance Report
-**Priority: Medium**
-
-- Automated daily summary generated at session close (16:00 UTC / 18:00 SAST)
-- Contents: trades taken today, daily PnL, running win rate, balance, drawdown
-- Delivered via Telegram or email
-- Optionally extend the dashboard with a `/performance` page showing weekly/monthly breakdown
 
 ### Step 15 — Walk-Forward Validation
 **Priority: High (before real money)**
@@ -257,31 +304,23 @@ to check whether the strategy parameters hold up out-of-sample.
 
 - Detect if current parameters are overfit to the cached training period
 - If out-of-sample performance degrades sharply vs in-sample → re-examine parameters
-- Requires pulling 2–3 years of OHLC data (need to bypass IG's 10,000 bar/day allowance or use a second data source)
 - Tools: extend `backtest.py` with `--walk-forward` flag
+- Deferred until after 2-week demo run
 
 ### Step 16 — Live Account Migration Checklist
 **Priority: High (before going live)**
 
 Before switching `IG_DEMO=false`:
-- [ ] Run backtest with minimum 500+ trades per pair (needs more OHLC data)
+- [ ] Complete 2-week demo run, evaluate live win rate vs 33.3% threshold
+- [ ] Run backtest with minimum 500+ trades per pair
 - [ ] Confirm walk-forward results acceptable (Step 15)
-- [ ] Verify all 116 tests pass on live config
+- [ ] Verify all 176 tests pass on live config
 - [ ] Set initial live risk lower: `RISK_PER_TRADE=0.005` (0.5%) for first 2 weeks
 - [ ] Set `HARD_DRAWDOWN=0.05` (5%) for live account (tighter than demo 8%)
 - [ ] Create a separate live DB (`data/forex_engine_live.db`) — never share with demo
 - [ ] Verify `amend_stop` price scaling works correctly on live prices
-- [ ] Confirm Telegram alerts (Step 13) are working before going live
+- [ ] Confirm Telegram alerts working before going live
 - [ ] Have a manual kill-switch procedure documented
-
-### Step 17 — Backtester Improvements
-**Priority: Medium**
-
-- Add 2-pip spread cost per round-trip to `_pnl()` — makes returns realistic
-- Multi-page OHLC fetch to get 3000+ bars (currently capped at ~1000 from IG)
-- Sharpe ratio calculation (annualised, risk-free rate = 0)
-- Per-strategy breakdown in stats (MR vs TF contribution)
-- Walk-forward mode (see Step 15)
 
 ---
 
@@ -321,10 +360,10 @@ EUR/USD: sends 11450 not 1.1450. Other pairs unaffected (price_scale=1).
 
 **File:** `test_all.py`
 **Run:** `python test_all.py`
-**Coverage:** 116 tests across Steps 1–12
-**Pass condition:** All 116 tests pass before merging any change.
+**Coverage:** 176 tests across Steps 1–18
+**Pass condition:** All tests pass before merging any change.
 
-Last run: 2026-03-24 — 124/124 PASSED
+Last run: 2026-03-24 — **176/176 PASSED**
 
 ---
 
@@ -391,8 +430,8 @@ forex-engine/
     db.py                          — SQLite helpers (all tables + queries)
     ig_client.py                   — IG REST API wrapper
   strategy/
-    indicators.py                  — shared atr(), rsi() (used by all strategy modules)
-    mean_reversion.py              — original strategy (unchanged logic)
+    indicators.py                  — shared atr(), rsi(), bollinger_bands() (Step 18)
+    mean_reversion.py              — RSI + Bollinger Bands signal (Step 18: replaced VWAP)
     trend_following.py             — EMA crossover strategy
     regime_detection.py            — ADX+ATR regime classifier
     mtf_filter.py                  — 5m confirmation filter
@@ -426,12 +465,16 @@ forex-engine/
 
 ## Current Engine Status (2026-03-24)
 
-- **Mode:** LIVE ORDERS on IG DEMO account Z69JGB
+- **Mode:** `--live` = REAL ORDERS on IG DEMO account Z69JGB (fake money, real prices)
 - **Balance:** $20,272.00
 - **Session:** 12:00–16:00 UTC (14:00–18:00 SAST)
+- **Strategy:** Hybrid regime-switching — RANGING → mean reversion (RSI+BB), TRENDING → EMA crossover
+- **Signal filter:** RSI < 30 AND close ≤ BB_lower (long) / RSI > 70 AND close ≥ BB_upper (short)
 - **COT data:** 208 rows (2025) + 44 rows (2026) loaded for all 4 pairs
 - **News events:** 29 events loaded (NFP + 26 central bank)
-- **OHLC:** 473 hourly + 500+ 5m bars cached per pair
-- **Tests:** 116/116 passing
-- **Known issue:** IG demo data allowance exhausted today from repeated restarts — clears midnight UTC. Engine trades normally on cached OHLC.
-- **Next action:** Tomorrow run `python backtest.py --fetch --bars 3000` for a proper backtest with 100+ trades per pair.
+- **OHLC:** 477 hourly + 524 5m bars cached per pair
+- **Tests:** 176/176 passing
+- **Scheduler:** Windows Task Scheduler — `ForexEngineDemo` fires `start_engine.bat --live` at 14:00 SAST Mon–Fri
+- **Telegram:** ✅ Startup alert, trade alerts, daily report, crash/stop alerts all wired
+- **2-week demo run:** Started 2026-03-24. Evaluate live win rate vs 33.3% threshold at end.
+- **After demo:** If win rate < 33% → tighten RSI to 25/75 and re-backtest. If ≥ 33% → proceed to Step 16 live checklist.
