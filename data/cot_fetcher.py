@@ -25,10 +25,13 @@ log = logging.getLogger(__name__)
 
 # Map CFTC contract names → our FX symbols
 CONTRACT_MAP: dict[str, str] = {
+    # Old format (fut_cot_txt_{year}.zip)
     "EURO FX - CHICAGO MERCANTILE EXCHANGE":                "EURUSD",
     "BRITISH POUND STERLING - CHICAGO MERCANTILE EXCHANGE": "GBPUSD",
     "SWISS FRANC - CHICAGO MERCANTILE EXCHANGE":            "USDCHF",
     "JAPANESE YEN - CHICAGO MERCANTILE EXCHANGE":           "GBPJPY",
+    # New format (deacot{year}.zip) — uses shorter names
+    "BRITISH POUND - CHICAGO MERCANTILE EXCHANGE":          "GBPUSD",
 }
 
 _CFTC_URL = "https://www.cftc.gov/files/dea/history/deacot{year}.zip"

@@ -183,10 +183,10 @@ def run(dry_run: bool = True) -> None:
     log.info("Engine running — polling every %ds  (Ctrl+C to stop)",
              config.QUOTE_INTERVAL_SEC)
 
-    _last_ohlc_refresh  = 0.0   # [NEW — Step 8] monotonic timestamps for rate-limited tasks
-    _last_position_sync = 0.0   # [NEW — Step 8]
-    _last_cot_refresh   = 0.0   # [NEW — Step 10]
-    _last_news_refresh  = 0.0   # [NEW — Step 11]
+    _last_ohlc_refresh  = 0.0              # [NEW — Step 8] monotonic timestamps for rate-limited tasks
+    _last_position_sync = 0.0              # [NEW — Step 8]
+    _last_cot_refresh   = time.monotonic() # [NEW — Step 10] seed already ran; don't re-download immediately
+    _last_news_refresh  = 0.0              # [NEW — Step 11]
 
     # ── Main loop ─────────────────────────────────────────────────────────────
     while _running:
