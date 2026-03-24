@@ -25,36 +25,30 @@ import numpy as np
 import pandas as pd
 
 from core import config
+from strategy.indicators import atr as _atr_shared, rsi as _rsi_shared  # [NEW — Step 9]
 
 log = logging.getLogger(__name__)
 
-# ── Parameters ────────────────────────────────────────────────────────────────
-RSI_PERIOD   = 14
-VWAP_WINDOW  = 20
-ATR_PERIOD   = 14
-RSI_OVERSOLD    = 35
-RSI_OVERBOUGHT  = 65
-STOP_ATR_MULT   = 0.8
-TARGET_ATR_MULT = 1.6   # 2 : 1 R
+# ── Parameters (sourced from config — edit values in core/config.py) ──────────
+RSI_PERIOD      = config.MR_RSI_PERIOD
+VWAP_WINDOW     = config.MR_VWAP_WINDOW
+ATR_PERIOD      = config.MR_ATR_PERIOD
+RSI_OVERSOLD    = config.MR_RSI_OVERSOLD
+RSI_OVERBOUGHT  = config.MR_RSI_OVERBOUGHT
+STOP_ATR_MULT   = config.MR_STOP_ATR_MULT
+TARGET_ATR_MULT = config.MR_TARGET_ATR_MULT  # 2 : 1 R
 MIN_BARS        = RSI_PERIOD + VWAP_WINDOW + 5
 
 
 # ── Indicators ────────────────────────────────────────────────────────────────
+# [NEW — Step 9] Delegates to strategy.indicators — no local copies.
 
 def _atr(df: pd.DataFrame, period: int = ATR_PERIOD) -> pd.Series:
-    hl = df["high"] - df["low"]
-    hc = (df["high"] - df["close"].shift()).abs()
-    lc = (df["low"]  - df["close"].shift()).abs()
-    tr = pd.concat([hl, hc, lc], axis=1).max(axis=1)
-    return tr.rolling(period).mean()
+    return _atr_shared(df, period)
 
 
 def _rsi(series: pd.Series, period: int = RSI_PERIOD) -> pd.Series:
-    delta = series.diff()
-    gain  = delta.clip(lower=0).ewm(alpha=1 / period, adjust=False).mean()
-    loss  = (-delta.clip(upper=0)).ewm(alpha=1 / period, adjust=False).mean()
-    rs    = gain / loss.replace(0, np.nan)
-    return (100 - 100 / (1 + rs)).fillna(50)
+    return _rsi_shared(series, period).fillna(50)  # fillna(50) = neutral on warmup
 
 
 def _vwap(df: pd.DataFrame, window: int = VWAP_WINDOW) -> pd.Series:

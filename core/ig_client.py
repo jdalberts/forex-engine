@@ -9,6 +9,8 @@ from typing import Optional
 
 import requests
 
+from core import config
+
 log = logging.getLogger(__name__)
 
 
@@ -58,7 +60,7 @@ class IGClient:
                 f"{self.base_url}/session",
                 json=payload,
                 headers=headers,
-                timeout=15,
+                timeout=config.IG_REQUEST_TIMEOUT_SEC,
             )
         except requests.RequestException as exc:
             log.error("IG auth request failed: %s", exc)
@@ -100,17 +102,33 @@ class IGClient:
         headers = {"Version": version}
 
         try:
-            resp = self._session.request(method, url, headers=headers, timeout=15, **kwargs)
+            resp = self._session.request(method, url, headers=headers, timeout=config.IG_REQUEST_TIMEOUT_SEC, **kwargs)
         except requests.RequestException as exc:
             log.error("IG %s %s failed: %s", method, path, exc)
-            return None
+            # [NEW — Step 9] Exponential backoff — retry up to IG_RETRY_MAX times
+            resp = None
+            for attempt in range(1, config.IG_RETRY_MAX + 1):
+                wait = min(config.IG_RETRY_BASE_SEC ** attempt, 30)
+                log.warning("Retrying %s %s in %ds (attempt %d/%d)…",
+                            method, path, wait, attempt, config.IG_RETRY_MAX)
+                time.sleep(wait)
+                try:
+                    resp = self._session.request(
+                        method, url, headers=headers,
+                        timeout=config.IG_REQUEST_TIMEOUT_SEC, **kwargs,
+                    )
+                    break
+                except requests.RequestException as exc2:
+                    log.error("Retry %d failed: %s", attempt, exc2)
+            if resp is None:
+                return None
 
         if resp.status_code == 401:
             log.warning("IG session expired — re-authenticating")
             if not self.authenticate():
                 return None
             try:
-                resp = self._session.request(method, url, headers={"Version": version}, timeout=15, **kwargs)
+                resp = self._session.request(method, url, headers={"Version": version}, timeout=config.IG_REQUEST_TIMEOUT_SEC, **kwargs)
             except requests.RequestException as exc:
                 log.error("IG retry failed: %s", exc)
                 return None
@@ -171,18 +189,25 @@ class IGClient:
         epic: str,
         resolution: str = "HOUR",
         max_bars: int = 500,
-        price_scale: int = 1,   # kept for compat; overridden by scalingFactor if snapshot called first
+        price_scale: int = 1,          # kept for compat; overridden by scalingFactor if snapshot called first
+        from_time: Optional[datetime] = None,   # [NEW — Step 8] if set, fetch only bars since this time
     ) -> list[dict]:
         """Historical OHLC bars from GET /prices/{epic} (v3, date-range).
 
         price_scale: same as get_snapshot — divide raw IG price by this.
+        from_time:   if provided, use as the start of the date range instead of
+                     calculating from max_bars.  Used by refresh_bars() for
+                     incremental fetches.
         """
         date_to   = datetime.now(timezone.utc).replace(tzinfo=None)
-        # Rough lookback: 1h bars × max_bars, cap at ~90 days for weekly
-        hours_back = max_bars * {"MINUTE": 1/60, "MINUTE_5": 5/60, "MINUTE_15": 15/60,
-                                  "MINUTE_30": 0.5, "HOUR": 1, "HOUR_2": 2, "HOUR_3": 3,
-                                  "HOUR_4": 4, "DAY": 24, "WEEK": 168}.get(resolution, 1)
-        date_from = date_to - timedelta(hours=hours_back * 1.1)   # 10 % buffer
+        if from_time is not None:                                        # [NEW — Step 8]
+            date_from = from_time
+        else:
+            # Rough lookback: 1h bars × max_bars, cap at ~90 days for weekly
+            hours_back = max_bars * {"MINUTE": 1/60, "MINUTE_5": 5/60, "MINUTE_15": 15/60,
+                                      "MINUTE_30": 0.5, "HOUR": 1, "HOUR_2": 2, "HOUR_3": 3,
+                                      "HOUR_4": 4, "DAY": 24, "WEEK": 168}.get(resolution, 1)
+            date_from = date_to - timedelta(hours=hours_back * 1.1)   # 10 % buffer
 
         resp = self._request(
             "GET",
@@ -307,12 +332,68 @@ class IGClient:
             log.error("Deal REJECTED  ref=%s  reason=%s", deal_reference, reason)
         return data
 
+    def get_account_balance(self) -> Optional[float]:
+        """
+        Fetch the real account balance from IG GET /accounts.
+        Returns the 'balance' field for the configured account_id, or None on failure.
+        Used by the engine to keep EquityGuard and DailyLossGuard in sync with
+        the actual account rather than a hardcoded starting value.
+        """
+        resp = self._request("GET", "/accounts", version="1")
+        if resp is None:
+            return None
+        accounts = resp.json().get("accounts", [])
+        for acct in accounts:
+            if acct.get("accountId") == self.account_id:
+                balance = acct.get("balance", {}).get("balance")
+                if balance is not None:
+                    return float(balance)
+        # Fallback: return balance of first account if account_id not matched
+        if accounts:
+            balance = accounts[0].get("balance", {}).get("balance")
+            if balance is not None:
+                log.warning("account_id %s not found — using first account balance", self.account_id)
+                return float(balance)
+        log.warning("Could not parse account balance from IG response")
+        return None
+
     def get_open_positions(self) -> list[dict]:
         """All open CFD positions."""
         resp = self._request("GET", "/positions", version="2")
         if resp is None:
             return []
         return resp.json().get("positions", [])
+
+    def amend_stop(self, epic: str, new_stop: float) -> bool:
+        """
+        [NEW — Step 5] Move the stop level on an open position.
+
+        Finds the live position by epic (GET /positions), then amends it via
+        PUT /positions/otc/{dealId}.  Returns True on success.
+
+        Note: uses an absolute stop level (not pip distance) — this is the
+        correct format for position *amendments* on the IG REST API.
+        The distance-based approach (Fix 2) only applies to *new* orders.
+        """
+        positions = self.get_open_positions()
+        match = next(
+            (p for p in positions if p.get("market", {}).get("epic") == epic),
+            None,
+        )
+        if match is None:
+            log.warning("amend_stop: no open position found for %s", epic)
+            return False
+
+        deal_id = match["position"]["dealId"]
+        payload = {
+            "trailingStop": False,
+            "stopLevel":    new_stop,
+        }
+        resp = self._request("PUT", f"/positions/otc/{deal_id}", version="2", json=payload)
+        if resp is None:
+            return False
+        log.info("Stop amended  epic=%s  deal=%s  new_stop=%.5f", epic, deal_id, new_stop)
+        return True
 
     def close_position(self, deal_id: str, direction: str, size: float) -> Optional[dict]:
         """Close a position by deal ID (direction = opposite of opening direction)."""

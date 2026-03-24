@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Generator
 
@@ -74,10 +74,27 @@ def init_db(path: str) -> None:
                 recorded_at TEXT  NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS trailing_state (
+                symbol     TEXT PRIMARY KEY,
+                best_price REAL NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS cot_data (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                report_date TEXT NOT NULL,
+                symbol      TEXT NOT NULL,
+                net_spec    REAL NOT NULL,
+                net_comm    REAL NOT NULL,
+                UNIQUE(report_date, symbol)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_ohlc_symbol_time
                 ON ohlc(symbol, timeframe, time);
             CREATE INDEX IF NOT EXISTS idx_quotes_symbol_time
                 ON quotes(symbol, time);
+            CREATE INDEX IF NOT EXISTS idx_cot_symbol_date
+                ON cot_data(symbol, report_date);
         """)
 
 
@@ -200,7 +217,7 @@ def insert_trade(path: str, trade: dict) -> int:
                 trade.get("signal_id"), trade.get("broker_ref"),
                 trade["symbol"], trade["direction"], trade["size"],
                 trade.get("entry_price"), trade.get("stop_level"), trade.get("limit_level"),
-                "open", trade.get("opened_at", datetime.utcnow().isoformat()),
+                "open", trade.get("opened_at", datetime.now(timezone.utc).replace(tzinfo=None).isoformat()),
             ),
         )
     return cur.lastrowid
@@ -215,11 +232,50 @@ def open_trade(path: str, symbol: str) -> dict | None:
     return dict(row) if row else None
 
 
+def all_open_trades(path: str) -> list[dict]:
+    """[NEW — Step 7A] All currently open trades across every symbol (for correlation check)."""
+    with connect(path) as conn:
+        rows = conn.execute(
+            "SELECT symbol, direction, opened_at FROM trades WHERE status='open' ORDER BY opened_at DESC"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def close_trade(path: str, trade_id: int, exit_price: float, pnl: float) -> None:
     with connect(path) as conn:
         conn.execute(
             "UPDATE trades SET exit_price=?, pnl=?, status='closed', closed_at=? WHERE id=?",
-            (exit_price, pnl, datetime.utcnow().isoformat(), trade_id),
+            (exit_price, pnl, datetime.now(timezone.utc).replace(tzinfo=None).isoformat(), trade_id),
+        )
+
+
+def get_signal(path: str, signal_id: int) -> dict | None:
+    """[NEW — Step 5] Fetch a single signal row by ID (used to check strategy type)."""
+    with connect(path) as conn:
+        row = conn.execute(
+            "SELECT * FROM signals WHERE id=?", (signal_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def daily_pnl(path: str) -> float:
+    """[NEW — Step 5] Sum of P&L from trades closed today (UTC date). Negative = loss."""
+    today = datetime.now(timezone.utc).date().isoformat()
+    with connect(path) as conn:
+        row = conn.execute(
+            "SELECT COALESCE(SUM(pnl), 0.0) FROM trades "
+            "WHERE status='closed' AND DATE(closed_at) = ?",
+            (today,),
+        ).fetchone()
+    return float(row[0]) if row else 0.0
+
+
+def update_trade_stop(path: str, trade_id: int, new_stop: float) -> None:
+    """[NEW — Step 5] Persist updated stop level after a trailing stop moves."""
+    with connect(path) as conn:
+        conn.execute(
+            "UPDATE trades SET stop_level=? WHERE id=?",
+            (new_stop, trade_id),
         )
 
 
@@ -237,8 +293,48 @@ def record_equity(path: str, balance: float) -> None:
     with connect(path) as conn:
         conn.execute(
             "INSERT INTO equity(balance, recorded_at) VALUES (?,?)",
-            (balance, datetime.utcnow().isoformat()),
+            (balance, datetime.now(timezone.utc).replace(tzinfo=None).isoformat()),
         )
+
+
+# ── Trailing stop persistence [NEW — Step 9] ──────────────────────────────────
+
+def save_trailing_best(path: str, symbol: str, best_price: float) -> None:
+    """Upsert the best-price tracker for a symbol."""
+    ts = datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+    with connect(path) as conn:
+        conn.execute(
+            "INSERT INTO trailing_state(symbol, best_price, updated_at) VALUES (?,?,?) "
+            "ON CONFLICT(symbol) DO UPDATE SET best_price=excluded.best_price, updated_at=excluded.updated_at",
+            (symbol, best_price, ts),
+        )
+
+
+def load_trailing_best(path: str) -> dict[str, float]:
+    """Load all persisted best-price entries → {symbol: best_price}."""
+    with connect(path) as conn:
+        rows = conn.execute("SELECT symbol, best_price FROM trailing_state").fetchall()
+    return {r["symbol"]: float(r["best_price"]) for r in rows}
+
+
+def delete_trailing_best(path: str, symbol: str) -> None:
+    """Remove a symbol's trailing state (called when position closes)."""
+    with connect(path) as conn:
+        conn.execute("DELETE FROM trailing_state WHERE symbol=?", (symbol,))
+
+
+# ── Maintenance [NEW — Step 9] ─────────────────────────────────────────────────
+
+def prune_old_records(path: str, days: int = 90) -> None:
+    """Delete quotes older than `days` days.  Trades and equity are kept forever."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).replace(tzinfo=None).isoformat()
+    with connect(path) as conn:
+        deleted = conn.execute(
+            "DELETE FROM quotes WHERE time < ?", (cutoff,)
+        ).rowcount
+    if deleted:
+        import logging as _log
+        _log.getLogger(__name__).info("Pruned %d quote records older than %d days", deleted, days)
 
 
 def equity_history(path: str, limit: int = 200) -> list[dict]:
@@ -248,3 +344,41 @@ def equity_history(path: str, limit: int = 200) -> list[dict]:
             (limit,),
         ).fetchall()
     return [dict(r) for r in reversed(rows)]
+
+
+# ── COT data [NEW — Step 10] ───────────────────────────────────────────────────
+
+def save_cot(path: str, rows: list[dict]) -> int:
+    """Upsert COT rows. Each row: {report_date, symbol, net_spec, net_comm}.
+    Returns number of rows inserted (ignored = already existed)."""
+    data = [
+        (r["report_date"], r["symbol"], r["net_spec"], r["net_comm"])
+        for r in rows
+    ]
+    with connect(path) as conn:
+        conn.executemany(
+            "INSERT OR IGNORE INTO cot_data(report_date, symbol, net_spec, net_comm) "
+            "VALUES (?,?,?,?)",
+            data,
+        )
+    return len(data)
+
+
+def load_cot_history(path: str, symbol: str, weeks: int = 52) -> list[dict]:
+    """Return last `weeks` COT rows for symbol, oldest-first."""
+    with connect(path) as conn:
+        rows = conn.execute(
+            "SELECT report_date, symbol, net_spec, net_comm FROM cot_data "
+            "WHERE symbol=? ORDER BY report_date DESC LIMIT ?",
+            (symbol, weeks),
+        ).fetchall()
+    return [dict(r) for r in reversed(rows)]
+
+
+def latest_cot_date(path: str, symbol: str) -> str | None:
+    """Return the most recent report_date stored for symbol."""
+    with connect(path) as conn:
+        row = conn.execute(
+            "SELECT MAX(report_date) FROM cot_data WHERE symbol=?", (symbol,)
+        ).fetchone()
+    return row[0] if row else None
