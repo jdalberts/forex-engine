@@ -103,7 +103,7 @@ CORR_USD_MAX: int = 1  # max open trades in the same net-USD direction (USD_LONG
 
 # ── Multi-timeframe entry confirmation [NEW — Step 7B] ─────────────────────────
 # ── Engine refresh intervals [NEW — Step 8] ────────────────────────────────────
-OHLC_REFRESH_INTERVAL_SEC: int  = 120  # incremental OHLC refresh (4 pairs × 2 res = 8 calls per refresh)
+OHLC_REFRESH_INTERVAL_SEC: int  = 600  # incremental OHLC refresh (4 pairs × 2 res = 8 calls/refresh; 600s = 48 calls/hr)
 POSITION_SYNC_INTERVAL_SEC: int = 60   # sync IG-closed positions to DB every 60s
 
 # ── Multi-timeframe entry confirmation [NEW — Step 7B] ─────────────────────────
