@@ -189,6 +189,19 @@ After pulling 3000 bars (`python backtest.py --fetch --bars 3000`), check:
 
 ---
 
+### RSI Threshold Tuning
+Yahoo Finance backtest (18 months, session-filtered, 2pip spread) shows **~21% win rate** — below the 33% needed for 2:1 R/R profitability. Current thresholds: `MR_RSI_OVERSOLD=30`, `MR_RSI_OVERBOUGHT=70`.
+
+**After 2 weeks of demo trading, check live win rate:**
+- If **≥ 33%** → parameters are fine; historical period (2024–2026 USD trending cycle) was just unfavourable for MR
+- If **< 33%** → tighten RSI thresholds to only trade more extreme setups:
+  - `MR_RSI_OVERSOLD: 30 → 25`
+  - `MR_RSI_OVERBOUGHT: 70 → 75`
+  - Re-run `python backtest.py --yahoo` and check if win rate improves
+  - Trade-off: fewer signals, but higher conviction entries
+
+---
+
 ## Pending Issues (Low Priority)
 
 | # | Issue | File | Priority |
