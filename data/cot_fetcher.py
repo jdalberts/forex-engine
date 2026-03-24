@@ -33,14 +33,32 @@ CONTRACT_MAP: dict[str, str] = {
 
 _CFTC_URL = "https://www.cftc.gov/files/dea/history/deacot{year}.zip"
 
-_REQUIRED_COLS = [
-    "Market_and_Exchange_Names",
-    "As_of_Date_In_Form_YYMMDD",
-    "NonComm_Positions_Long_All",
-    "NonComm_Positions_Short_All",
-    "Comm_Positions_Long_All",
-    "Comm_Positions_Short_All",
-]
+# Column aliases: CFTC has used slightly different names across file formats.
+# Each key is our canonical name; value is a list of known alternatives.
+_COL_ALIASES: dict[str, list[str]] = {
+    "Market_and_Exchange_Names":   ["Market_and_Exchange_Names", "Market and Exchange Names"],
+    "As_of_Date_In_Form_YYMMDD":   ["As_of_Date_In_Form_YYMMDD", "As_of_Date_in_Form_YYMMDD",
+                                    "Report_Date_as_YYYY-MM-DD"],
+    "NonComm_Positions_Long_All":  ["NonComm_Positions_Long_All", "Noncomm_Positions_Long_All"],
+    "NonComm_Positions_Short_All": ["NonComm_Positions_Short_All", "Noncomm_Positions_Short_All"],
+    "Comm_Positions_Long_All":     ["Comm_Positions_Long_All"],
+    "Comm_Positions_Short_All":    ["Comm_Positions_Short_All"],
+}
+
+
+def _resolve_columns(actual_cols: list[str]) -> dict[str, str] | None:
+    """Map our canonical column names to whatever the file actually calls them.
+
+    Returns {canonical: actual} or None if any required column is missing.
+    """
+    actual_set = set(actual_cols)
+    mapping: dict[str, str] = {}
+    for canonical, aliases in _COL_ALIASES.items():
+        found = next((a for a in aliases if a in actual_set), None)
+        if found is None:
+            return None
+        mapping[canonical] = found
+    return mapping
 
 
 def _download_year(year: int) -> pd.DataFrame | None:
@@ -62,12 +80,28 @@ def _download_year(year: int) -> pd.DataFrame | None:
 
     try:
         zf = zipfile.ZipFile(io.BytesIO(resp.content))
-        # The file inside is always named "annual.txt"
-        with zf.open("annual.txt") as f:
-            raw = pd.read_csv(f, usecols=_REQUIRED_COLS, dtype=str, low_memory=False)
+        # Try "annual.txt" first; fall back to first .txt file in the archive
+        txt_files = [n for n in zf.namelist() if n.lower().endswith(".txt")]
+        inner_name = "annual.txt" if "annual.txt" in txt_files else (txt_files[0] if txt_files else None)
+        if inner_name is None:
+            log.warning("COT %d: no .txt file found inside ZIP (%s)", year, zf.namelist())
+            return None
+        with zf.open(inner_name) as f:
+            raw = pd.read_csv(f, dtype=str, low_memory=False)
     except Exception as exc:
         log.warning("COT parse failed for %d: %s", year, exc)
         return None
+
+    col_map = _resolve_columns(list(raw.columns))
+    if col_map is None:
+        log.warning(
+            "COT %d: unrecognised column names in '%s'. Found: %s",
+            year, inner_name, list(raw.columns)[:10],
+        )
+        return None
+
+    # Rename to canonical names so the rest of the code is unchanged
+    raw = raw.rename(columns={v: k for k, v in col_map.items()})
 
     rows = []
     for _, row in raw.iterrows():
@@ -76,8 +110,12 @@ def _download_year(year: int) -> pd.DataFrame | None:
             continue
         symbol = CONTRACT_MAP[name]
         try:
-            date_str = str(row["As_of_Date_In_Form_YYMMDD"]).strip().zfill(6)
-            report_date = datetime.strptime(date_str, "%y%m%d").date().isoformat()
+            date_val = str(row["As_of_Date_In_Form_YYMMDD"]).strip()
+            # Support both YYMMDD (e.g. "260101") and YYYY-MM-DD (e.g. "2026-01-01")
+            if "-" in date_val:
+                report_date = datetime.strptime(date_val[:10], "%Y-%m-%d").date().isoformat()
+            else:
+                report_date = datetime.strptime(date_val.zfill(6), "%y%m%d").date().isoformat()
             net_spec = float(row["NonComm_Positions_Long_All"]) - float(row["NonComm_Positions_Short_All"])
             net_comm = float(row["Comm_Positions_Long_All"])    - float(row["Comm_Positions_Short_All"])
         except (ValueError, TypeError) as exc:
