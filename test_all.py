@@ -945,6 +945,82 @@ _s13_results = [r for r in results if r[0].startswith("step13:")]
 _s13_pass = sum(1 for _, s in _s13_results if s == PASS)
 print(f"\nStep 13: {_s13_pass}/{len(_s13_results)} passed")
 
+# ── Step 14: Daily Performance Report ─────────────────────────────────────────
+print("\n--- Step 14: Daily Performance Report ---")
+
+import tempfile as _tmp14, os as _os14
+from core import db as _db14
+from data.reporter import build_daily_report as _bdr14
+
+_db14_path = _tmp14.mktemp(suffix=".db")
+try:
+    _db14.init_db(_db14_path)
+
+    # today_closed_trades returns empty list on fresh DB
+    check("step14: today_closed_trades empty on fresh DB",
+          _db14.today_closed_trades(_db14_path) == [])
+
+    # all_time_stats returns zeroes on fresh DB
+    _ats = _db14.all_time_stats(_db14_path)
+    check("step14: all_time_stats total=0 on fresh DB",   _ats["total"] == 0)
+    check("step14: all_time_stats win_rate=0 on fresh DB", _ats["win_rate"] == 0.0)
+
+    # Insert synthetic trades and check stats
+    from datetime import datetime as _dt14, timezone as _tz14
+    _now14 = _dt14.now(_tz14.utc).replace(tzinfo=None).isoformat()
+    _sig14a = {"symbol": "EURUSD", "direction": "long", "strategy": "mean_reversion",
+               "entry": 1.08, "stop": 1.07, "target": 1.10, "status": "submitted",
+               "generated_at": _now14}
+    _sig14b = {"symbol": "GBPUSD", "direction": "short", "strategy": "trend_following",
+               "entry": 1.28, "stop": 1.29, "target": 1.26, "status": "submitted",
+               "generated_at": _now14}
+    _sid14a = _db14.insert_signal(_db14_path, _sig14a)
+    _sid14b = _db14.insert_signal(_db14_path, _sig14b)
+    _tid14a = _db14.insert_trade(_db14_path, {"signal_id": _sid14a, "broker_ref": "DR1",
+        "symbol": "EURUSD", "direction": "long", "size": 1, "entry_price": 1.08,
+        "stop_level": 1.07, "limit_level": 1.10, "opened_at": _now14})
+    _tid14b = _db14.insert_trade(_db14_path, {"signal_id": _sid14b, "broker_ref": "DR2",
+        "symbol": "GBPUSD", "direction": "short", "size": 1, "entry_price": 1.28,
+        "stop_level": 1.29, "limit_level": 1.26, "opened_at": _now14})
+    _db14.close_trade(_db14_path, _tid14a, exit_price=1.10, pnl=200.0)   # win
+    _db14.close_trade(_db14_path, _tid14b, exit_price=1.285, pnl=-50.0)  # loss
+
+    _ats2 = _db14.all_time_stats(_db14_path)
+    check("step14: all_time_stats total=2",        _ats2["total"] == 2)
+    check("step14: all_time_stats wins=1",         _ats2["wins"] == 1)
+    check("step14: all_time_stats losses=1",       _ats2["losses"] == 1)
+    check("step14: all_time_stats win_rate=50.0",  _ats2["win_rate"] == 50.0)
+    check("step14: all_time_stats total_pnl=150",  abs(_ats2["total_pnl"] - 150.0) < 0.01)
+
+    # today_closed_trades finds today's trades
+    _today14 = _db14.today_closed_trades(_db14_path)
+    check("step14: today_closed_trades returns 2 trades", len(_today14) == 2)
+
+    # build_daily_report returns a string with key fields
+    _report14 = _bdr14(_db14_path, 20200.0)
+    check("step14: report contains DAILY REPORT",    "DAILY REPORT" in _report14)
+    check("step14: report contains trades count",    "Trades Today: 2" in _report14)
+    check("step14: report contains Balance",         "Balance:" in _report14)
+    check("step14: report contains All-Time",        "All-Time:" in _report14)
+    check("step14: report is a non-empty string",    isinstance(_report14, str) and len(_report14) > 50)
+
+    # No-trade day report
+    _empty_db14 = _tmp14.mktemp(suffix=".db")
+    _db14.init_db(_empty_db14)
+    _report14_empty = _bdr14(_empty_db14, 20000.0)
+    check("step14: no-trade report contains 'No trades'",
+          "No trades" in _report14_empty)
+    if _os14.path.exists(_empty_db14):
+        _os14.remove(_empty_db14)
+
+finally:
+    if _os14.path.exists(_db14_path):
+        _os14.remove(_db14_path)
+
+_s14_results = [r for r in results if r[0].startswith("step14:")]
+_s14_pass = sum(1 for _, s in _s14_results if s == PASS)
+print(f"\nStep 14: {_s14_pass}/{len(_s14_results)} passed")
+
 # ── Final summary (re-print with new tests) ────────────────────────────────────
 total   = len(results)
 passed  = sum(1 for _, s in results if s == PASS)

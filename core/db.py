@@ -382,3 +382,41 @@ def latest_cot_date(path: str, symbol: str) -> str | None:
             "SELECT MAX(report_date) FROM cot_data WHERE symbol=?", (symbol,)
         ).fetchone()
     return row[0] if row else None
+
+
+# ── Daily report helpers [NEW — Step 14] ──────────────────────────────────────
+
+def today_closed_trades(path: str) -> list[dict]:
+    """[NEW — Step 14] Return all trades closed today (UTC), oldest first."""
+    today = datetime.now(timezone.utc).date().isoformat()
+    with connect(path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM trades WHERE status='closed' AND DATE(closed_at) = ? "
+            "ORDER BY closed_at ASC",
+            (today,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def all_time_stats(path: str) -> dict:
+    """[NEW — Step 14] Aggregate stats across all closed trades ever."""
+    with connect(path) as conn:
+        row = conn.execute(
+            "SELECT COUNT(*), "
+            "SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END), "
+            "SUM(CASE WHEN pnl <= 0 THEN 1 ELSE 0 END), "
+            "COALESCE(SUM(pnl), 0.0) "
+            "FROM trades WHERE status='closed'"
+        ).fetchone()
+    total     = int(row[0] or 0)
+    wins      = int(row[1] or 0)
+    losses    = int(row[2] or 0)
+    total_pnl = float(row[3] or 0.0)
+    win_rate  = round(wins / total * 100, 1) if total > 0 else 0.0
+    return {
+        "total":     total,
+        "wins":      wins,
+        "losses":    losses,
+        "total_pnl": total_pnl,
+        "win_rate":  win_rate,
+    }

@@ -27,6 +27,7 @@ from data.fetcher import fetch_live_quote, refresh_bars, seed_history   # [NEW �
 from data.news_filter import (is_news_window, refresh_news_cache,        # [NEW — Step 11]
                               refresh_central_bank_calendar)
 from data.notifier import send_alert                                     # [NEW — Step 13]
+from data.reporter import build_daily_report                             # [NEW — Step 14]
 from execution.gateway import ExecutionGateway
 from risk.guard import (CorrelationGuard, DailyLossGuard, EquityGuard,    # [NEW — Step 7A]
                         PositionSizer, SessionGate, SpreadFilter,         # [NEW — Step 5]
@@ -194,6 +195,7 @@ def run(dry_run: bool = True) -> None:
     _last_cot_refresh   = time.monotonic() # [NEW — Step 10] seed already ran; don't re-download immediately
     _last_news_refresh  = 0.0              # [NEW — Step 11]
     _daily_loss_alerted: set = set()       # [NEW — Step 13] dates already alerted to avoid repeat spam
+    _last_report_date:   str = ""          # [NEW — Step 14] date of last daily report sent
 
     # ── Main loop ─────────────────────────────────────────────────────────────
     while _running:
@@ -423,6 +425,15 @@ def run(dry_run: bool = True) -> None:
                         f"Target: {signal_data['target']:.5f}\n"
                         f"Stop: {_sp}p  |  Target: {_tp}p"
                     )
+
+        # [NEW — Step 14] Daily report — fire once after session closes each day
+        if (not in_session
+                and now.time() >= config.SESSION_END_UTC
+                and now.strftime("%Y-%m-%d") != _last_report_date):
+            _report = build_daily_report(config.DB_PATH, equity_guard.current_balance)
+            send_alert(_report)
+            log.info("Daily report sent for %s", now.strftime("%Y-%m-%d"))
+            _last_report_date = now.strftime("%Y-%m-%d")
 
         time.sleep(config.QUOTE_INTERVAL_SEC)
 
