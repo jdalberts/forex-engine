@@ -25,19 +25,21 @@ import numpy as np
 import pandas as pd
 
 from core import config
-from strategy.indicators import atr as _atr_shared, rsi as _rsi_shared  # [NEW — Step 9]
+from strategy.indicators import atr as _atr_shared, rsi as _rsi_shared, bollinger_bands as _bb_shared  # [NEW — Step 9 / Step 18]
 
 log = logging.getLogger(__name__)
 
 # ── Parameters (sourced from config — edit values in core/config.py) ──────────
 RSI_PERIOD      = config.MR_RSI_PERIOD
 VWAP_WINDOW     = config.MR_VWAP_WINDOW
+BB_PERIOD       = config.MR_BB_PERIOD       # [NEW — Step 18]
+BB_STD_DEV      = config.MR_BB_STD_DEV      # [NEW — Step 18]
 ATR_PERIOD      = config.MR_ATR_PERIOD
 RSI_OVERSOLD    = config.MR_RSI_OVERSOLD
 RSI_OVERBOUGHT  = config.MR_RSI_OVERBOUGHT
 STOP_ATR_MULT   = config.MR_STOP_ATR_MULT
 TARGET_ATR_MULT = config.MR_TARGET_ATR_MULT  # 2 : 1 R
-MIN_BARS        = RSI_PERIOD + VWAP_WINDOW + 5
+MIN_BARS        = RSI_PERIOD + BB_PERIOD + 5  # [Step 18] was VWAP_WINDOW (same value: 39)
 
 
 # ── Indicators ────────────────────────────────────────────────────────────────
@@ -49,6 +51,12 @@ def _atr(df: pd.DataFrame, period: int = ATR_PERIOD) -> pd.Series:
 
 def _rsi(series: pd.Series, period: int = RSI_PERIOD) -> pd.Series:
     return _rsi_shared(series, period).fillna(50)  # fillna(50) = neutral on warmup
+
+
+def _bb(df: pd.DataFrame, period: int = BB_PERIOD,
+        num_std: float = BB_STD_DEV) -> tuple:
+    """Bollinger Bands wrapper — delegates to strategy.indicators. [NEW — Step 18]"""
+    return _bb_shared(df["close"], period, num_std)
 
 
 def _vwap(df: pd.DataFrame, window: int = VWAP_WINDOW) -> pd.Series:
@@ -80,30 +88,31 @@ def generate(bars: list[dict]) -> Optional[dict]:
     df = df.sort_values("time").reset_index(drop=True)
 
     df["rsi"]  = _rsi(df["close"])
-    df["vwap"] = _vwap(df)
+    df["bb_upper"], df["bb_mid"], df["bb_lower"] = _bb(df)   # [Step 18] replaced VWAP
     df["atr"]  = _atr(df)
 
-    last  = df.iloc[-1]
-    rsi   = float(last["rsi"])
-    vwap  = float(last["vwap"])
-    close = float(last["close"])
-    atr   = float(last["atr"])
+    last     = df.iloc[-1]
+    rsi      = float(last["rsi"])
+    bb_upper = float(last["bb_upper"])
+    bb_lower = float(last["bb_lower"])
+    close    = float(last["close"])
+    atr      = float(last["atr"])
 
-    if pd.isna(atr) or atr <= 0:
-        log.debug("ATR not ready")
+    if pd.isna(atr) or atr <= 0 or pd.isna(bb_upper) or pd.isna(bb_lower):
+        log.debug("Indicators not ready (ATR or BB)")
         return None
 
     direction: Optional[str] = None
     reason:    Optional[str] = None
 
-    if rsi < RSI_OVERSOLD and close < vwap:
+    if rsi < RSI_OVERSOLD and close <= bb_lower:
         direction = "long"
         reason    = (f"RSI {rsi:.1f} < {RSI_OVERSOLD} | "
-                     f"close {close:.5f} < VWAP {vwap:.5f}")
-    elif rsi > RSI_OVERBOUGHT and close > vwap:
+                     f"close {close:.5f} <= BB_lower {bb_lower:.5f}")
+    elif rsi > RSI_OVERBOUGHT and close >= bb_upper:
         direction = "short"
         reason    = (f"RSI {rsi:.1f} > {RSI_OVERBOUGHT} | "
-                     f"close {close:.5f} > VWAP {vwap:.5f}")
+                     f"close {close:.5f} >= BB_upper {bb_upper:.5f}")
 
     if direction is None:
         return None

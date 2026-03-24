@@ -48,10 +48,10 @@ SESSION_END_HOUR   = 16     # [NEW] UTC hour — match live engine session gate
 # Import indicator constants and functions from existing strategy modules
 # (same calculations as live trading — no duplication)
 from strategy.mean_reversion import (
-    RSI_PERIOD, VWAP_WINDOW, ATR_PERIOD as MR_ATR_PERIOD,
+    RSI_PERIOD, BB_PERIOD, BB_STD_DEV, ATR_PERIOD as MR_ATR_PERIOD,  # [Step 18] VWAP_WINDOW → BB_PERIOD/BB_STD_DEV
     RSI_OVERSOLD, RSI_OVERBOUGHT,
     STOP_ATR_MULT as MR_STOP_MULT, TARGET_ATR_MULT as MR_TARGET_MULT,
-    _rsi, _vwap, _atr as _mr_atr,
+    _rsi, _bb, _atr as _mr_atr,                                       # [Step 18] _vwap → _bb
 )
 from strategy.trend_following import (
     FAST_EMA_PERIOD, SLOW_EMA_PERIOD,
@@ -72,9 +72,9 @@ def _add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     Compute ALL strategy indicators once across the full dataset.
     Vectorised — O(n), not O(n^2).
     """
-    # Mean reversion indicators
+    # Mean reversion indicators  [Step 18: mr_vwap → mr_bb_upper/mid/lower]
     df["mr_rsi"]  = _rsi(df["close"], RSI_PERIOD)
-    df["mr_vwap"] = _vwap(df, VWAP_WINDOW)
+    df["mr_bb_upper"], df["mr_bb_mid"], df["mr_bb_lower"] = _bb(df, BB_PERIOD, BB_STD_DEV)
     df["mr_atr"]  = _mr_atr(df, MR_ATR_PERIOD)
 
     # Trend following indicators
@@ -94,12 +94,16 @@ def _add_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
 def _mean_rev_signal(row: pd.Series) -> Optional[dict]:
     """Generate mean reversion signal from pre-computed row — returns dict or None."""
-    rsi, vwap, close, atr = row["mr_rsi"], row["mr_vwap"], float(row["close"]), row["mr_atr"]
-    if any(pd.isna(v) for v in [rsi, vwap, atr]) or atr <= 0:
+    rsi      = row["mr_rsi"]
+    bb_upper = row["mr_bb_upper"]   # [Step 18] replaced vwap
+    bb_lower = row["mr_bb_lower"]   # [Step 18] replaced vwap
+    close    = float(row["close"])
+    atr      = row["mr_atr"]
+    if any(pd.isna(v) for v in [rsi, bb_upper, bb_lower, atr]) or atr <= 0:
         return None
-    if rsi < RSI_OVERSOLD and close < vwap:
+    if rsi < RSI_OVERSOLD and close <= bb_lower:
         direction = "long"
-    elif rsi > RSI_OVERBOUGHT and close > vwap:
+    elif rsi > RSI_OVERBOUGHT and close >= bb_upper:
         direction = "short"
     else:
         return None

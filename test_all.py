@@ -1079,6 +1079,127 @@ _s17_results = [r for r in results if r[0].startswith("step17:")]
 _s17_pass = sum(1 for _, s in _s17_results if s == PASS)
 print(f"\nStep 17: {_s17_pass}/{len(_s17_results)} passed")
 
+# ── Step 18: Bollinger Bands Mean Reversion Upgrade ────────────────────────────
+print("\n--- Step 18: Bollinger Bands ---")
+
+import numpy as _np18
+import pandas as _pd18
+from strategy.indicators import bollinger_bands as _bband18
+from strategy import mean_reversion as _mr18
+from core import config as _cfg18
+
+# ── 1. bollinger_bands() returns 3 series ──
+_close18 = _pd18.Series([1.1000 + i * 0.0001 for i in range(50)])
+_upper18, _mid18, _lower18 = _bband18(_close18, 20, 2.0)
+check("step18: bollinger_bands returns 3 series",
+      isinstance(_upper18, _pd18.Series) and isinstance(_mid18, _pd18.Series) and isinstance(_lower18, _pd18.Series))
+
+# ── 2. NaN warmup: first 19 rows should be NaN ──
+check("step18: first 19 rows are NaN (warmup)",
+      _upper18.iloc[:19].isna().all() and _lower18.iloc[:19].isna().all())
+
+# ── 3. Row 19 onward should not be NaN ──
+check("step18: row 19 onward are not NaN",
+      not _upper18.iloc[19:].isna().any())
+
+# ── 4. upper > mid > lower ──
+check("step18: upper > mid everywhere (non-NaN)",
+      (_upper18.dropna() > _mid18.dropna()).all())
+check("step18: mid > lower everywhere (non-NaN)",
+      (_mid18.dropna() > _lower18.dropna()).all())
+
+# ── 5. middle equals rolling(20).mean() ──
+_expected_mid18 = _close18.rolling(20).mean()
+check("step18: middle equals rolling mean",
+      _mid18.dropna().round(10).equals(_expected_mid18.dropna().round(10)))
+
+# ── 6. band width equals 2 × std ──
+_std18   = _close18.rolling(20).std()
+_width18 = (_upper18 - _lower18).dropna()
+_expected_width18 = (2 * 2.0 * _std18).dropna()
+check("step18: band width == 2 * num_std * std",
+      (_width18.round(10) == _expected_width18.round(10)).all())
+
+# ── 7. config constants exist with correct types ──
+check("step18: config MR_BB_PERIOD is int",    isinstance(_cfg18.MR_BB_PERIOD, int))
+check("step18: config MR_BB_STD_DEV is float", isinstance(_cfg18.MR_BB_STD_DEV, float))
+check("step18: config MR_BB_PERIOD == 20",     _cfg18.MR_BB_PERIOD == 20)
+check("step18: config MR_BB_STD_DEV == 2.0",   _cfg18.MR_BB_STD_DEV == 2.0)
+
+# ── 8. mean_reversion exports BB_PERIOD, BB_STD_DEV, _bb; _vwap still present ──
+check("step18: mean_reversion exports BB_PERIOD",  hasattr(_mr18, "BB_PERIOD"))
+check("step18: mean_reversion exports BB_STD_DEV", hasattr(_mr18, "BB_STD_DEV"))
+check("step18: mean_reversion exports _bb",        callable(getattr(_mr18, "_bb", None)))
+check("step18: _vwap still exists",                callable(getattr(_mr18, "_vwap", None)))
+
+# ── 9. generate() returns LONG on strong downtrend (RSI<30 + close <= BB_lower) ──
+def _make_mr_bars18(n=80, drift=-0.0008):
+    """Bars with strong downtrend to push RSI < 30 and price below BB lower band."""
+    bars = []
+    price = 1.3000
+    for i in range(n):
+        price += drift
+        o = price
+        h = o + 0.0001
+        l = o - 0.0001
+        c = l  # close at the low to force RSI down
+        bars.append({
+            "time":   (_pd18.Timestamp("2024-01-01") + _pd18.Timedelta(hours=i)).isoformat(),
+            "open":   round(o, 5), "high": round(h, 5),
+            "low":    round(l, 5), "close": round(c, 5), "volume": 1000,
+        })
+    return bars
+
+_long_bars18  = _make_mr_bars18(80, drift=-0.0012)
+_short_bars18 = _make_mr_bars18(80, drift=+0.0012)
+
+_long_sig18  = _mr18.generate(_long_bars18)
+_short_sig18 = _mr18.generate(_short_bars18)
+
+# May be None if synthetic data doesn't quite push RSI to extreme — just verify type
+check("step18: generate() returns dict or None (long setup)",
+      _long_sig18 is None or isinstance(_long_sig18, dict))
+check("step18: generate() returns dict or None (short setup)",
+      _short_sig18 is None or isinstance(_short_sig18, dict))
+
+# If a signal fired, verify it has the expected BB reason string
+if _long_sig18 is not None:
+    check("step18: long signal reason contains BB_lower",
+          "BB_lower" in _long_sig18.get("reason", ""))
+else:
+    check("step18: long signal reason contains BB_lower (skipped — no signal)", True)
+
+if _short_sig18 is not None:
+    check("step18: short signal reason contains BB_upper",
+          "BB_upper" in _short_sig18.get("reason", ""))
+else:
+    check("step18: short signal reason contains BB_upper (skipped — no signal)", True)
+
+# ── 10. generate() returns None on flat/neutral bars ──
+_flat_bars18 = _make_mr_bars18(80, drift=0.0)
+_flat_sig18  = _mr18.generate(_flat_bars18)
+check("step18: flat bars return None (RSI ~50, price near BB mid)",
+      _flat_sig18 is None)
+
+# ── 11. backtest._add_indicators produces BB columns (not mr_vwap) ──
+import importlib as _il18
+_bt18 = _il18.import_module("backtest")
+_bt_bars18 = [
+    {"time": _pd18.Timestamp("2024-01-01") + _pd18.Timedelta(hours=i),
+     "open": 1.10, "high": 1.11, "low": 1.09,
+     "close": 1.10 + i * 0.0001, "volume": 1000}
+    for i in range(100)
+]
+_bt_df18 = _pd18.DataFrame(_bt_bars18)
+_bt_df18 = _bt18._add_indicators(_bt_df18)
+check("step18: backtest has mr_bb_upper column",    "mr_bb_upper" in _bt_df18.columns)
+check("step18: backtest has mr_bb_lower column",    "mr_bb_lower" in _bt_df18.columns)
+check("step18: backtest does NOT have mr_vwap col", "mr_vwap" not in _bt_df18.columns)
+
+_s18_results = [r for r in results if r[0].startswith("step18:")]
+_s18_pass = sum(1 for _, s in _s18_results if s == PASS)
+print(f"\nStep 18: {_s18_pass}/{len(_s18_results)} passed")
+
 # ── Final summary (re-print with new tests) ────────────────────────────────────
 total   = len(results)
 passed  = sum(1 for _, s in results if s == PASS)

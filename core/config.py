@@ -66,7 +66,9 @@ ENGINE_TRAILING_ATR_PERIOD: int = 14   # ATR rolling period used in trailing sto
 
 # ── Strategy: Mean Reversion ───────────────────────────────────────────────────
 MR_RSI_PERIOD: int       = 14    # RSI lookback period
-MR_VWAP_WINDOW: int      = 20    # VWAP rolling window
+MR_VWAP_WINDOW: int      = 20    # VWAP rolling window (kept — _vwap still used internally)
+MR_BB_PERIOD: int        = 20    # [NEW — Step 18] Bollinger Band rolling window
+MR_BB_STD_DEV: float     = 2.0   # [NEW — Step 18] standard deviation multiplier (±2σ ≈ 5% of bars)
 MR_ATR_PERIOD: int       = 14    # ATR lookback period
 MR_RSI_OVERSOLD: float   = 30.0  # RSI below this → long signal candidate  [was 35.0 — tighter filter, fewer but higher-conviction longs]
 MR_RSI_OVERBOUGHT: float = 70.0  # RSI above this → short signal candidate [was 65.0 — tighter filter, fewer but higher-conviction shorts]

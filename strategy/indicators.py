@@ -54,3 +54,30 @@ def rsi(close: pd.Series, period: int) -> pd.Series:
     loss  = (-delta.clip(upper=0)).ewm(alpha=1 / period, adjust=False).mean()
     rs    = gain / loss.replace(0, np.nan)
     return 100 - 100 / (1 + rs)
+
+
+def bollinger_bands(
+    close: pd.Series,
+    period: int,
+    num_std: float,
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """
+    Bollinger Bands — upper, middle, lower.  [NEW — Step 18]
+
+    Parameters
+    ----------
+    close   : price series
+    period  : rolling window for mean and std
+    num_std : number of standard deviations for the bands
+
+    Returns
+    -------
+    (upper, middle, lower) — each a pd.Series aligned to `close`.
+    NaN for the first period-1 rows (warmup).  Callers handle NaN.
+    middle = rolling mean; bands = middle ± num_std × rolling std (ddof=1).
+    """
+    middle = close.rolling(period).mean()
+    std    = close.rolling(period).std()          # ddof=1 is pandas default
+    upper  = middle + num_std * std
+    lower  = middle - num_std * std
+    return upper, middle, lower
