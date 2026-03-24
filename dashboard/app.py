@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time as _time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,10 +22,81 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 _cot = CotBias(db_path=config.DB_PATH)
 
+# Backtest results cache — recomputed at most every 5 minutes
+_bt_cache: dict | None = None
+_bt_cache_ts: float = 0.0
+
 
 @app.get("/")
 def index():
     return FileResponse(str(STATIC_DIR / "index.html"))
+
+
+@app.get("/backtest")
+def backtest_page():
+    return FileResponse(str(STATIC_DIR / "backtest.html"))
+
+
+@app.get("/api/backtest")
+def backtest_api():
+    """Run baseline vs hybrid backtest on cached OHLC. Results cached 5 min."""
+    global _bt_cache, _bt_cache_ts
+    if _bt_cache is not None and _time.monotonic() - _bt_cache_ts < 300:
+        return JSONResponse(_bt_cache)
+
+    from backtest import compute_stats, run_backtest
+
+    out: dict = {}
+    for symbol, pcfg in config.PAIRS.items():
+        bars = db.load_ohlc(config.DB_PATH, symbol, "HOUR", limit=5000)
+        if len(bars) < 70:
+            continue
+        baseline = run_backtest(bars, pcfg, config.INITIAL_BALANCE, use_regime=False)
+        hybrid   = run_backtest(bars, pcfg, config.INITIAL_BALANCE, use_regime=True)
+
+        # Downsample equity curves (keep every 5th point) to reduce payload
+        def _ds(curve):
+            step = max(1, len(curve) // 200)
+            return curve[::step]
+
+        # Sanitise trades for JSON (convert numpy types, add bar-index as proxy time)
+        def _clean_trades(trades, bars_list):
+            out = []
+            for t in trades:
+                ei = int(t["entry_bar"])
+                xi = int(t["exit_bar"])
+                out.append({
+                    "entry_time":  bars_list[min(ei, len(bars_list)-1)]["time"] if bars_list else "",
+                    "exit_time":   bars_list[min(xi, len(bars_list)-1)]["time"] if bars_list else "",
+                    "direction":   t["direction"],
+                    "strategy":    t["strategy"],
+                    "entry":       float(t["entry"]),
+                    "exit_price":  float(t["exit_price"]),
+                    "pnl":         float(t["pnl"]),
+                    "result":      t["result"],
+                    "contracts":   int(t["contracts"]),
+                })
+            return out
+
+        out[symbol] = {
+            "bars":      len(bars),
+            "date_from": baseline["date_from"],
+            "date_to":   baseline["date_to"],
+            "baseline": {
+                "stats":        compute_stats(baseline),
+                "equity_curve": _ds(baseline["equity_curve"]),
+                "trades":       _clean_trades(baseline["trades"], bars),
+            },
+            "hybrid": {
+                "stats":        compute_stats(hybrid),
+                "equity_curve": _ds(hybrid["equity_curve"]),
+                "trades":       _clean_trades(hybrid["trades"], bars),
+            },
+        }
+
+    _bt_cache    = out
+    _bt_cache_ts = _time.monotonic()
+    return JSONResponse(out)
 
 
 @app.get("/api/state")

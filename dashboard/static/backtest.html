@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forex Engine — Backtest</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #0d1117;
+      --surface: #161b22;
+      --border:  #30363d;
+      --text:    #e6edf3;
+      --muted:   #8b949e;
+      --green:   #3fb950;
+      --red:     #f85149;
+      --blue:    #58a6ff;
+      --yellow:  #d29922;
+      --purple:  #bc8cff;
+      --radius:  8px;
+      --font:    'Inter', system-ui, -apple-system, sans-serif;
+    }
+    body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; padding: 20px; min-height: 100vh; }
+    .page { max-width: 1440px; margin: 0 auto; }
+
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border);
+    }
+    .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+    .logo span { color: var(--blue); }
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    .nav-link { font-size: 13px; color: var(--muted); text-decoration: none; }
+    .nav-link:hover { color: var(--text); }
+
+    .btn {
+      padding: 6px 16px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); font-size: 13px;
+      cursor: pointer; font-family: var(--font);
+    }
+    .btn:hover { border-color: var(--blue); color: var(--blue); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .row { margin-bottom: 14px; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+    .card-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 14px; }
+
+    /* ── Mode toggle ────────────────────────────────── */
+    .mode-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .mode-tab {
+      padding: 5px 14px; border-radius: 6px; border: 1px solid var(--border);
+      background: transparent; color: var(--muted); font-size: 12px; font-weight: 600;
+      cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px; font-family: var(--font);
+    }
+    .mode-tab.active { background: rgba(88,166,255,.15); border-color: var(--blue); color: var(--blue); }
+
+    /* ── Stats grid ─────────────────────────────────── */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+
+    .pair-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+    .pair-label { font-size: 13px; font-weight: 700; color: var(--blue); margin-bottom: 12px; }
+    .metric-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 7px; }
+    .metric-key { font-size: 12px; color: var(--muted); }
+    .metric-val { font-size: 13px; font-weight: 600; }
+    .val-green  { color: var(--green); }
+    .val-red    { color: var(--red); }
+    .val-yellow { color: var(--yellow); }
+    .val-muted  { color: var(--muted); }
+
+    /* ── Comparison table ───────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th { text-align: left; padding: 7px 10px; color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+    td { padding: 8px 10px; border-bottom: 1px solid rgba(48,54,61,.5); font-variant-numeric: tabular-nums; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+    .better { color: var(--green); font-weight: 600; }
+    .worse  { color: var(--red); }
+
+    /* ── Chart ──────────────────────────────────────── */
+    .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .chart-wrap { position: relative; height: 220px; }
+
+    /* ── Trades table ───────────────────────────────── */
+    .tag { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+    .tag-long  { background: rgba(63,185,80,.15); color: var(--green); }
+    .tag-short { background: rgba(248,81,73,.15); color: var(--red); }
+    .tag-win   { background: rgba(63,185,80,.15); color: var(--green); }
+    .tag-stop  { background: rgba(248,81,73,.15); color: var(--red); }
+    .tag-timeout { background: rgba(210,153,34,.15); color: var(--yellow); }
+    .tag-open_at_end { background: rgba(139,148,158,.1); color: var(--muted); }
+    .tag-pair  { background: rgba(88,166,255,.1); color: var(--blue); font-size: 10px; }
+    .pnl-pos { color: var(--green); }
+    .pnl-neg { color: var(--red); }
+    .empty-row { color: var(--muted); font-style: italic; padding: 14px 10px; }
+
+    /* ── Filter bar ─────────────────────────────────── */
+    .filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
+    .filter-bar select, .filter-bar input {
+      background: var(--surface); border: 1px solid var(--border); color: var(--text);
+      padding: 5px 10px; border-radius: 6px; font-size: 12px; font-family: var(--font);
+    }
+
+    /* ── Loading state ──────────────────────────────── */
+    #loading { text-align: center; padding: 60px; color: var(--muted); }
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 10px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 1100px) { .stats-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 800px)  { .stats-grid, .charts-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="logo">Forex<span>Engine</span> — Backtest</div>
+    <div class="header-right">
+      <a href="/" class="nav-link">← Live Dashboard</a>
+      <button class="btn" id="run-btn" onclick="runBacktest()">Run Backtest</button>
+      <span id="bt-status" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+  </header>
+
+  <div id="loading"><span class="spinner"></span>Running backtest on cached OHLC…</div>
+  <div id="content" style="display:none">
+
+    <!-- Mode toggle -->
+    <div class="mode-tabs">
+      <button class="mode-tab active" id="tab-hybrid"   onclick="setMode('hybrid')">Hybrid (Regime-Switching)</button>
+      <button class="mode-tab"        id="tab-baseline" onclick="setMode('baseline')">Mean Reversion Only</button>
+      <button class="mode-tab"        id="tab-compare"  onclick="setMode('compare')">Side-by-Side Comparison</button>
+    </div>
+
+    <!-- Per-pair stat cards -->
+    <div class="stats-grid row" id="stats-grid"></div>
+
+    <!-- Equity curves -->
+    <div class="charts-grid row" id="charts-grid"></div>
+
+    <!-- Comparison table (visible in compare mode) -->
+    <div class="card row" id="compare-card" style="display:none">
+      <div class="card-title">Baseline vs Hybrid — All Pairs</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Pair</th>
+            <th>Bars</th>
+            <th>MR Trades</th><th>MR Win%</th><th>MR Return</th><th>MR MaxDD</th><th>MR PF</th>
+            <th></th>
+            <th>HY Trades</th><th>HY Win%</th><th>HY Return</th><th>HY MaxDD</th><th>HY PF</th>
+          </tr>
+        </thead>
+        <tbody id="compare-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Trade log -->
+    <div class="card row">
+      <div class="card-title">Trade Log</div>
+      <div class="filter-bar">
+        <select id="filter-pair">
+          <option value="">All pairs</option>
+          <option>EURUSD</option><option>GBPUSD</option>
+          <option>USDCHF</option><option>GBPJPY</option>
+        </select>
+        <select id="filter-result">
+          <option value="">All results</option>
+          <option value="win">Wins</option>
+          <option value="stop">Losses</option>
+          <option value="timeout">Timeouts</option>
+        </select>
+        <select id="filter-strategy">
+          <option value="">All strategies</option>
+          <option value="mean_reversion">Mean Reversion</option>
+          <option value="trend_following">Trend Following</option>
+        </select>
+        <span id="trade-count" style="font-size:12px;color:var(--muted);margin-left:4px"></span>
+      </div>
+      <table>
+        <thead>
+          <tr><th>Entry Time</th><th>Pair</th><th>Dir</th><th>Strategy</th><th>Entry</th><th>Exit</th><th>PnL</th><th>Result</th></tr>
+        </thead>
+        <tbody id="trades-body"></tbody>
+      </table>
+    </div>
+
+  </div><!-- /content -->
+</div>
+
+<script>
+  const PAIRS   = ['EURUSD','GBPUSD','USDCHF','GBPJPY'];
+  const COLOURS = { EURUSD:'#58a6ff', GBPUSD:'#3fb950', USDCHF:'#d29922', GBPJPY:'#bc8cff' };
+  const START   = 20000;
+
+  let _data  = null;
+  let _mode  = 'hybrid';
+  let _charts = {};
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+  const fmtMoney  = n => '$' + parseFloat(n).toLocaleString('en-US', {minimumFractionDigits:2});
+  const fmtSign   = n => (n >= 0 ? '+' : '') + fmtMoney(n);
+  const fmtPct    = n => (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+  const fmtPrice  = (n, sym) => sym && sym.includes('JPY') ? parseFloat(n).toFixed(3) : parseFloat(n).toFixed(5);
+  function shortTime(s) { return s ? String(s).replace('T',' ').slice(0,16) : '–'; }
+  function tag(cls, text) { return `<span class="tag tag-${cls}">${text}</span>`; }
+
+  function colourVal(val, good, bad) {
+    if (val == null) return 'val-muted';
+    if (val >= good) return 'val-green';
+    if (val <= bad)  return 'val-red';
+    return 'val-yellow';
+  }
+
+  // ── Mode toggle ──────────────────────────────────────────────────────────
+  function setMode(m) {
+    _mode = m;
+    ['hybrid','baseline','compare'].forEach(t => {
+      $(`tab-${t}`).classList.toggle('active', t === m);
+    });
+    $('compare-card').style.display = m === 'compare' ? '' : 'none';
+    if (_data) renderAll();
+  }
+
+  // ── Run backtest ─────────────────────────────────────────────────────────
+  async function runBacktest(force = false) {
+    $('loading').style.display = '';
+    $('content').style.display = 'none';
+    $('run-btn').disabled = true;
+    $('bt-status').textContent = 'Running…';
+
+    try {
+      const url = force ? '/api/backtest?force=1' : '/api/backtest';
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(res.statusText);
+      _data = await res.json();
+      render();
+      $('bt-status').textContent = 'Last run: ' + new Date().toLocaleTimeString();
+    } catch(e) {
+      $('bt-status').textContent = 'Error: ' + e.message;
+    } finally {
+      $('loading').style.display = 'none';
+      $('content').style.display = '';
+      $('run-btn').disabled = false;
+    }
+  }
+
+  function render() {
+    renderAll();
+    renderCompare();
+    renderTrades();
+    bindFilters();
+  }
+
+  // ── Stat cards ───────────────────────────────────────────────────────────
+  function renderAll() {
+    const grid = $('stats-grid');
+    const chartGrid = $('charts-grid');
+    grid.innerHTML = '';
+    chartGrid.innerHTML = '';
+    Object.values(_charts).forEach(c => c.destroy());
+    _charts = {};
+
+    for (const sym of PAIRS) {
+      const d = _data[sym];
+      if (!d) continue;
+      const isCmp = (_mode === 'compare');
+      const s = d[isCmp ? 'hybrid' : _mode]?.stats || d.hybrid.stats;
+
+      const wr  = s.win_rate;
+      const ret = s.total_return_pct;
+      const dd  = s.max_drawdown_pct;
+      const pf  = s.profit_factor === Infinity ? '∞' : s.profit_factor;
+
+      grid.innerHTML += `
+        <div class="pair-card">
+          <div class="pair-label">${sym.slice(0,3)}/${sym.slice(3)}
+            <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:6px">${d.date_from} → ${d.date_to}</span>
+          </div>
+          <div class="metric-row"><span class="metric-key">Trades</span><span class="metric-val val-muted">${s.total_trades}</span></div>
+          <div class="metric-row"><span class="metric-key">Win rate</span>
+            <span class="metric-val ${colourVal(wr,55,40)}">${wr != null ? wr+'%' : '–'}</span></div>
+          <div class="metric-row"><span class="metric-key">Total return</span>
+            <span class="metric-val ${ret >= 0 ? 'val-green' : 'val-red'}">${fmtPct(ret)}</span></div>
+          <div class="metric-row"><span class="metric-key">Max drawdown</span>
+            <span class="metric-val ${colourVal(-dd, -5, -15)}">${dd.toFixed(2)}%</span></div>
+          <div class="metric-row"><span class="metric-key">Profit factor</span>
+            <span class="metric-val ${colourVal(typeof pf==='number'?pf:parseFloat(pf), 1.5, 1.0)}">${pf}</span></div>
+          <div class="metric-row"><span class="metric-key">Final balance</span>
+            <span class="metric-val ${s.final_balance >= START ? 'val-green':'val-red'}">${fmtMoney(s.final_balance)}</span></div>
+        </div>`;
+
+      // Equity chart
+      chartGrid.innerHTML += `
+        <div class="card">
+          <div class="card-title">${sym.slice(0,3)}/${sym.slice(3)} — Equity Curve</div>
+          <div class="chart-wrap"><canvas id="chart-${sym}"></canvas></div>
+        </div>`;
+    }
+
+    // Build charts after DOM update
+    requestAnimationFrame(() => {
+      for (const sym of PAIRS) {
+        const d = _data[sym];
+        if (!d) continue;
+        const ctx = document.getElementById(`chart-${sym}`)?.getContext('2d');
+        if (!ctx) continue;
+
+        const datasets = [];
+        if (_mode === 'hybrid' || _mode === 'compare') {
+          datasets.push({
+            label: 'Hybrid',
+            data: d.hybrid.equity_curve,
+            borderColor: COLOURS[sym],
+            backgroundColor: COLOURS[sym].replace(')', ',0.06)').replace('rgb','rgba'),
+            borderWidth: 2, pointRadius: 0, tension: 0.3, fill: true,
+          });
+        }
+        if (_mode === 'baseline' || _mode === 'compare') {
+          datasets.push({
+            label: 'Baseline (MR)',
+            data: d.baseline.equity_curve,
+            borderColor: '#8b949e',
+            backgroundColor: 'rgba(139,148,158,0.04)',
+            borderWidth: 1.5, pointRadius: 0, tension: 0.3, fill: false,
+            borderDash: [4, 3],
+          });
+        }
+
+        _charts[sym] = new Chart(ctx, {
+          type: 'line',
+          data: { labels: datasets[0].data.map((_,i) => i), datasets },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+              legend: { display: _mode === 'compare', labels: { color:'#8b949e', font:{size:11} } },
+              tooltip: { callbacks: { label: c => c.dataset.label + ': ' + fmtMoney(c.parsed.y) } },
+            },
+            scales: {
+              x: { display: false },
+              y: { grid: { color:'rgba(48,54,61,0.6)' }, ticks: { color:'#8b949e', callback: v => '$'+v.toLocaleString() } },
+            },
+          },
+        });
+      }
+    });
+  }
+
+  // ── Comparison table ──────────────────────────────────────────────────────
+  function renderCompare() {
+    const body = $('compare-body');
+    body.innerHTML = '';
+    for (const sym of PAIRS) {
+      const d = _data[sym];
+      if (!d) continue;
+      const b = d.baseline.stats;
+      const h = d.hybrid.stats;
+      const retBetter = h.total_return_pct >= b.total_return_pct;
+      const ddBetter  = h.max_drawdown_pct <= b.max_drawdown_pct;
+      const pfBetter  = (h.profit_factor || 0) >= (b.profit_factor || 0);
+      const wrBetter  = h.win_rate >= b.win_rate;
+      body.innerHTML += `
+        <tr>
+          <td><span class="tag tag-pair">${sym}</span></td>
+          <td style="color:var(--muted)">${d.bars}</td>
+          <td>${b.total_trades}</td>
+          <td>${b.win_rate}%</td>
+          <td>${fmtPct(b.total_return_pct)}</td>
+          <td>${b.max_drawdown_pct.toFixed(1)}%</td>
+          <td>${b.profit_factor}</td>
+          <td style="color:var(--border)">|</td>
+          <td class="${h.total_trades >= b.total_trades ? '' : 'worse'}">${h.total_trades}</td>
+          <td class="${wrBetter  ? 'better':'worse'}">${h.win_rate}%</td>
+          <td class="${retBetter ? 'better':'worse'}">${fmtPct(h.total_return_pct)}</td>
+          <td class="${ddBetter  ? 'better':'worse'}">${h.max_drawdown_pct.toFixed(1)}%</td>
+          <td class="${pfBetter  ? 'better':'worse'}">${h.profit_factor}</td>
+        </tr>`;
+    }
+  }
+
+  // ── Trade log ─────────────────────────────────────────────────────────────
+  let _allTrades = [];
+
+  function renderTrades() {
+    _allTrades = [];
+    for (const sym of PAIRS) {
+      const d = _data[sym];
+      if (!d) continue;
+      const src = _mode === 'baseline' ? d.baseline.trades : d.hybrid.trades;
+      src.forEach(t => _allTrades.push({...t, symbol: sym}));
+    }
+    // Sort by entry_time desc
+    _allTrades.sort((a,b) => String(b.entry_time).localeCompare(String(a.entry_time)));
+    filterTrades();
+  }
+
+  function filterTrades() {
+    const pair   = $('filter-pair').value;
+    const result = $('filter-result').value;
+    const strat  = $('filter-strategy').value;
+    const rows   = _allTrades.filter(t =>
+      (!pair   || t.symbol   === pair)   &&
+      (!result || t.result   === result) &&
+      (!strat  || t.strategy === strat)
+    );
+    $('trade-count').textContent = rows.length + ' trades';
+    const body = $('trades-body');
+    if (rows.length === 0) {
+      body.innerHTML = '<tr><td colspan="8" class="empty-row">No trades match filter</td></tr>';
+      return;
+    }
+    body.innerHTML = rows.slice(0, 200).map(t => {
+      const pnlCls = t.pnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+      const stLabel = t.strategy === 'mean_reversion' ? 'MR' : 'TF';
+      return `<tr>
+        <td style="color:var(--muted)">${shortTime(t.entry_time)}</td>
+        <td>${tag('pair', t.symbol)}</td>
+        <td>${tag(t.direction, t.direction.toUpperCase())}</td>
+        <td style="color:var(--muted)">${stLabel}</td>
+        <td>${fmtPrice(t.entry, t.symbol)}</td>
+        <td>${fmtPrice(t.exit_price, t.symbol)}</td>
+        <td><span class="${pnlCls}">${(t.pnl >= 0 ? '+' : '') + fmtMoney(t.pnl)}</span></td>
+        <td>${tag(t.result, t.result)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function bindFilters() {
+    ['filter-pair','filter-result','filter-strategy'].forEach(id => {
+      $(id).addEventListener('change', filterTrades);
+    });
+  }
+
+  // ── Auto-run on load ──────────────────────────────────────────────────────
+  runBacktest();
+</script>
+</body>
+</html>
