@@ -204,16 +204,29 @@ After pulling 3000 bars (`python backtest.py --fetch --bars 3000`), check:
 
 ## Upcoming Steps
 
-### Step 13 — Alerts / Notifications
-**Priority: High** — currently no way to know a trade fired without watching logs.
+### Step 13 — Alerts / Notifications ✅ DONE
+**Files:** `data/notifier.py` (new), `core/config.py`, `engine.py`
 
-- Telegram bot message when trade opens/closes (deal reference, pair, direction, size, entry, stop, target)
-- Telegram alert when daily loss limit hit
-- Telegram alert when engine crashes / stops unexpectedly
-- Optional: email fallback if Telegram not configured
-- Implementation: `data/notifier.py` — `send_alert(msg)` with Telegram `requests.post` to Bot API
-- Engine calls `send_alert()` at: trade open, trade close, drawdown halt, auth failure
-- Config: `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID` in `.env`
+Real-time Telegram notifications — never raises, silently no-ops if unconfigured.
+
+**Alert triggers:**
+- 🟢 Trade open — pair, direction, entry/stop/target, pip distances
+- 🔴 Trade closed — pair + estimated P&L (from mid-session sync)
+- ⚠️ Daily loss limit hit — once per day (deduplicated by date to avoid spam)
+- 🚨 Hard drawdown halt — balance + halt message
+- 🚨 Auth failure — if IG login fails on startup
+- 🚨 Engine crash — exception type/message + restart prompt
+- 🛑 Normal stop — clean shutdown confirmation
+
+**Setup:** Add to `.env`:
+```
+TELEGRAM_TOKEN=<bot token from @BotFather>
+TELEGRAM_CHAT_ID=<your chat ID>
+```
+Find your chat_id: message your bot → visit `https://api.telegram.org/bot<TOKEN>/getUpdates`
+
+**Config:** `TELEGRAM_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_ENABLED` (auto-set if both present)
+**Tests:** 8 new tests; total 124/124 passing
 
 ### Step 14 — Daily Performance Report
 **Priority: Medium**
@@ -298,7 +311,7 @@ EUR/USD: sends 11450 not 1.1450. Other pairs unaffected (price_scale=1).
 **Coverage:** 116 tests across Steps 1–12
 **Pass condition:** All 116 tests pass before merging any change.
 
-Last run: 2026-03-24 — 116/116 PASSED
+Last run: 2026-03-24 — 124/124 PASSED
 
 ---
 
