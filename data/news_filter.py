@@ -477,6 +477,13 @@ def refresh_news_cache(now: Optional[datetime] = None) -> None:
 
 # ── Main gate ─────────────────────────────────────────────────────────────────
 
+def next_news_event(now: datetime) -> Optional[datetime]:
+    """Return the nearest upcoming high-impact event (UTC), or None if none scheduled."""
+    all_events = list(_event_cache) + _builtin_events(now) + _load_custom_events(config.NEWS_EVENTS_FILE)
+    future = [e for e in set(all_events) if e > now]
+    return min(future) if future else None
+
+
 def is_news_window(now: datetime, pause_minutes: int = config.NEWS_PAUSE_MINUTES) -> bool:
     """Return True if `now` is within `pause_minutes` of any known high-impact event."""
     window     = timedelta(minutes=pause_minutes)
