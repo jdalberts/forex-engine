@@ -99,25 +99,58 @@ def _load_custom_events(events_file: str) -> list[datetime]:
     return result
 
 
-# ── Optional: Financial Modeling Prep API ─────────────────────────────────────
+# ── Optional: Financial Modeling Prep API (stable) ────────────────────────────
+
+# Countries whose economic releases directly move our 4 FX pairs
+_FMP_COUNTRIES = {"US", "GB", "EU", "CH", "JP"}
+
+# Keywords that identify high-impact events (stable API has no impact field)
+_HIGH_IMPACT_KEYWORDS = (
+    "non farm", "nonfarm", "payroll",          # NFP
+    "fomc", "federal reserve", "fed rate",     # FOMC
+    "interest rate",                           # Central bank decisions
+    "bank of england", "boe",                  # BOE
+    "european central bank", "ecb",            # ECB
+    "swiss national bank", "snb",              # SNB
+    "bank of japan", "boj",                    # BOJ
+    "cpi", "consumer price",                   # Inflation
+    "ppi", "producer price",                   # Producer inflation
+    "pce",                                     # US PCE (Fed's preferred inflation)
+    "gdp",                                     # Growth
+    "unemployment",                            # Labour market
+    "retail sales",                            # Consumer spending
+    "ism manufacturing", "ism services",       # Business surveys
+    "jolts",                                   # US job openings
+)
+
+
+def _is_high_impact(event_name: str, country: str) -> bool:
+    """Return True if this FMP event is high-impact for our traded pairs."""
+    if country not in _FMP_COUNTRIES:
+        return False
+    name_lower = event_name.lower()
+    return any(kw in name_lower for kw in _HIGH_IMPACT_KEYWORDS)
+
 
 def _fetch_fmp_events(api_key: str, from_date: date, to_date: date) -> list[datetime]:
     """
-    Fetch high-impact economic events from FMP economic calendar API.
+    Fetch high-impact economic events from FMP stable economic calendar API.
 
-    Endpoint: GET https://financialmodelingprep.com/api/v3/economic_calendar
-    Params: from, to, apikey
-    Returns list of UTC datetimes for HIGH-impact events only.
+    Endpoint: GET https://financialmodelingprep.com/stable/economic-calendar
+    Params:   from, to, apikey
+    Filters:  countries relevant to our 4 FX pairs + high-impact keyword match
+    Returns:  list of UTC datetimes (all times in API response are UTC)
 
-    Free tier key: https://financialmodelingprep.com/developer/docs
+    Free tier: 250 calls/day — engine uses ~24/day (hourly refresh).
+    Get your key: https://financialmodelingprep.com/developer/docs
     """
     if not api_key:
         return []
-    url = "https://financialmodelingprep.com/api/v3/economic_calendar"
+    url = "https://financialmodelingprep.com/stable/economic-calendar"
     params = {
-        "from":    from_date.isoformat(),
-        "to":      to_date.isoformat(),
-        "apikey":  api_key,
+        "from":   from_date.isoformat(),
+        "to":     to_date.isoformat(),
+        "apikey": api_key,
     }
     try:
         resp = requests.get(url, params=params, timeout=15)
@@ -125,20 +158,21 @@ def _fetch_fmp_events(api_key: str, from_date: date, to_date: date) -> list[date
         log.warning("FMP calendar fetch failed: %s", exc)
         return []
     if not resp.ok:
-        log.warning("FMP calendar HTTP %s", resp.status_code)
+        log.warning("FMP calendar HTTP %s: %s", resp.status_code, resp.text[:200])
         return []
     events = []
     for item in resp.json():
         try:
-            if item.get("impact", "").lower() != "high":
+            country    = (item.get("country") or "").upper()
+            event_name = item.get("event") or ""
+            if not _is_high_impact(event_name, country):
                 continue
-            # FMP returns date as "2026-06-05 13:30:00"
-            dt_str = item.get("date", "")
-            dt     = datetime.fromisoformat(dt_str)
+            # Stable API returns date as "2026-06-05 13:30:00" (UTC)
+            dt = datetime.fromisoformat(item["date"])
             events.append(dt)
-        except (ValueError, AttributeError):
+        except (KeyError, ValueError, AttributeError):
             continue
-    log.info("FMP calendar: fetched %d high-impact events (%s to %s)",
+    log.info("FMP calendar: %d high-impact events %s to %s",
              len(events), from_date, to_date)
     return events
 
