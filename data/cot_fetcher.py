@@ -36,13 +36,35 @@ _CFTC_URL = "https://www.cftc.gov/files/dea/history/deacot{year}.zip"
 # Column aliases: CFTC has used slightly different names across file formats.
 # Each key is our canonical name; value is a list of known alternatives.
 _COL_ALIASES: dict[str, list[str]] = {
-    "Market_and_Exchange_Names":   ["Market_and_Exchange_Names", "Market and Exchange Names"],
-    "As_of_Date_In_Form_YYMMDD":   ["As_of_Date_In_Form_YYMMDD", "As_of_Date_in_Form_YYMMDD",
-                                    "Report_Date_as_YYYY-MM-DD"],
-    "NonComm_Positions_Long_All":  ["NonComm_Positions_Long_All", "Noncomm_Positions_Long_All"],
-    "NonComm_Positions_Short_All": ["NonComm_Positions_Short_All", "Noncomm_Positions_Short_All"],
-    "Comm_Positions_Long_All":     ["Comm_Positions_Long_All"],
-    "Comm_Positions_Short_All":    ["Comm_Positions_Short_All"],
+    "Market_and_Exchange_Names":   [
+        "Market_and_Exchange_Names",
+        "Market and Exchange Names",
+    ],
+    "As_of_Date_In_Form_YYMMDD":   [
+        "As_of_Date_In_Form_YYMMDD",
+        "As_of_Date_in_Form_YYMMDD",
+        "As of Date in Form YYMMDD",
+        "Report_Date_as_YYYY-MM-DD",
+        "As of Date in Form YYYY-MM-DD",
+    ],
+    "NonComm_Positions_Long_All":  [
+        "NonComm_Positions_Long_All",
+        "Noncomm_Positions_Long_All",
+        "Noncommercial Positions-Long (All)",
+    ],
+    "NonComm_Positions_Short_All": [
+        "NonComm_Positions_Short_All",
+        "Noncomm_Positions_Short_All",
+        "Noncommercial Positions-Short (All)",
+    ],
+    "Comm_Positions_Long_All":     [
+        "Comm_Positions_Long_All",
+        "Commercial Positions-Long (All)",
+    ],
+    "Comm_Positions_Short_All":    [
+        "Comm_Positions_Short_All",
+        "Commercial Positions-Short (All)",
+    ],
 }
 
 
