@@ -31,7 +31,7 @@ CONTRACT_MAP: dict[str, str] = {
     "JAPANESE YEN - CHICAGO MERCANTILE EXCHANGE":           "GBPJPY",
 }
 
-_CFTC_URL = "https://www.cftc.gov/files/dea/history/fut_cot_txt_{year}.zip"
+_CFTC_URL = "https://www.cftc.gov/files/dea/history/deacot{year}.zip"
 
 _REQUIRED_COLS = [
     "Market_and_Exchange_Names",
@@ -57,7 +57,7 @@ def _download_year(year: int) -> pd.DataFrame | None:
         return None
 
     if not resp.ok:
-        log.warning("COT download %d → HTTP %s", year, resp.status_code)
+        log.warning("COT download %d -> HTTP %s", year, resp.status_code)
         return None
 
     try:

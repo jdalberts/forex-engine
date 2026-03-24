@@ -134,7 +134,7 @@ class IGClient:
                 return None
 
         if not resp.ok:
-            log.error("IG %s %s → %s: %s", method, path, resp.status_code, resp.text[:300])
+            log.error("IG %s %s -> %s: %s", method, path, resp.status_code, resp.text[:300])
             return None
 
         return resp
