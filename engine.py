@@ -134,22 +134,31 @@ def run(dry_run: bool = True) -> None:
         return
 
     # ── Sync: close DB trades that IG already closed ──────────────────────────
-    ig_open = {p["market"]["epic"] for p in client.get_open_positions()}
-    for symbol, pcfg in pairs.items():
-        db_trade = db.open_trade(config.DB_PATH, symbol)
-        if db_trade and pcfg["epic"] not in ig_open:
-            # Estimate PnL from last known quote
-            quote = db.latest_quote(config.DB_PATH, symbol)
-            if quote:
-                mid   = (float(quote["bid"]) + float(quote["ask"])) / 2
-                entry = float(db_trade["entry_price"])
-                size  = float(db_trade["size"])
-                pnl   = round((mid - entry) * size if db_trade["direction"] == "long"
-                              else (entry - mid) * size, 2)
-            else:
-                pnl = 0.0
-            db.close_trade(config.DB_PATH, db_trade["id"], exit_price=mid if quote else entry, pnl=pnl)
-            log.info("[%s] Position closed on IG — synced DB  estimated_pnl=%.2f", symbol, pnl)
+    try:                                                                     # [BUG 4 FIX]
+        ig_open = {p["market"]["epic"] for p in client.get_open_positions()}
+    except Exception:
+        log.warning("Startup sync: failed to fetch IG positions — skipping")
+        ig_open = None
+    if ig_open is not None:
+        for symbol, pcfg in pairs.items():
+            db_trade = db.open_trade(config.DB_PATH, symbol)
+            if db_trade and pcfg["epic"] not in ig_open:
+                # Estimate PnL from last known quote
+                quote = db.latest_quote(config.DB_PATH, symbol)
+                if quote:
+                    mid   = (float(quote["bid"]) + float(quote["ask"])) / 2
+                    entry = float(db_trade["entry_price"])
+                    size  = float(db_trade["size"])
+                    pnl   = round((mid - entry) * size if db_trade["direction"] == "long"
+                                  else (entry - mid) * size, 2)
+                else:
+                    pnl = 0.0
+                try:                                                         # [BUG 4 FIX]
+                    db.close_trade(config.DB_PATH, db_trade["id"],
+                                   exit_price=mid if quote else entry, pnl=pnl)
+                    log.info("[%s] Position closed on IG — synced DB  estimated_pnl=%.2f", symbol, pnl)
+                except Exception:
+                    log.warning("[%s] Startup sync: DB close failed (may already be closed)", symbol)
 
     # ── Seed history for all pairs ────────────────────────────────────────────
     for symbol, pcfg in pairs.items():
@@ -241,29 +250,39 @@ def run(dry_run: bool = True) -> None:
 
         # [NEW — Step 8] Mid-session position sync — detect positions IG closed
         if _now_mono - _last_position_sync >= config.POSITION_SYNC_INTERVAL_SEC:
-            _ig_open = {p["market"]["epic"] for p in client.get_open_positions()}
-            for _sym, _pcfg in pairs.items():
-                _db_trade = db.open_trade(config.DB_PATH, _sym)
-                if _db_trade and _pcfg["epic"] not in _ig_open:
-                    _quote = db.latest_quote(config.DB_PATH, _sym)
-                    if _quote:
-                        _mid   = (float(_quote["bid"]) + float(_quote["ask"])) / 2
-                        _entry = float(_db_trade["entry_price"])
-                        _size  = float(_db_trade["size"])
-                        _pnl   = round(
-                            (_mid - _entry) * _size if _db_trade["direction"] == "long"
-                            else (_entry - _mid) * _size, 2
+            try:                                                             # [BUG 4 FIX]
+                _ig_open = {p["market"]["epic"] for p in client.get_open_positions()}
+            except Exception:
+                log.warning("Position sync: failed to fetch IG positions — skipping this cycle")
+                _ig_open = None
+            if _ig_open is not None:
+                for _sym, _pcfg in pairs.items():
+                    _db_trade = db.open_trade(config.DB_PATH, _sym)
+                    if _db_trade and _pcfg["epic"] not in _ig_open:
+                        _quote = db.latest_quote(config.DB_PATH, _sym)
+                        if _quote:
+                            _mid   = (float(_quote["bid"]) + float(_quote["ask"])) / 2
+                            _entry = float(_db_trade["entry_price"])
+                            _size  = float(_db_trade["size"])
+                            _pnl   = round(
+                                (_mid - _entry) * _size if _db_trade["direction"] == "long"
+                                else (_entry - _mid) * _size, 2
+                            )
+                        else:
+                            _mid, _pnl = float(_db_trade.get("entry_price", 0)), 0.0
+                        try:                                                 # [BUG 4 FIX]
+                            db.close_trade(config.DB_PATH, _db_trade["id"],
+                                           exit_price=_mid, pnl=_pnl)
+                        except Exception:
+                            log.warning("[%s] Position sync: DB close failed (may already be closed)",
+                                        _sym)
+                            continue
+                        log.info("[%s] Mid-session sync: IG closed position — DB updated  pnl=%.2f",
+                                 _sym, _pnl)
+                        send_alert(                                         # [NEW — Step 13]
+                            f"🔴 TRADE CLOSED\n"
+                            f"{_sym}  |  est. P&L: ${_pnl:+.2f}"
                         )
-                    else:
-                        _mid, _pnl = float(_db_trade.get("entry_price", 0)), 0.0
-                    db.close_trade(config.DB_PATH, _db_trade["id"],
-                                   exit_price=_mid, pnl=_pnl)
-                    log.info("[%s] Mid-session sync: IG closed position — DB updated  pnl=%.2f",
-                             _sym, _pnl)
-                    send_alert(                                             # [NEW — Step 13]
-                        f"🔴 TRADE CLOSED\n"
-                        f"{_sym}  |  est. P&L: ${_pnl:+.2f}"
-                    )
             _last_position_sync = _now_mono
 
 

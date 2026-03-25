@@ -111,6 +111,7 @@ class EquityGuard:
         self.db_path         = db_path
         self.start_balance   = initial_balance
         self.current_balance = initial_balance
+        self.peak_balance    = initial_balance          # [BUG 2 FIX] high-water mark
         self.soft_dd         = soft_dd
         self.hard_dd         = hard_dd
         self.halted          = False
@@ -118,7 +119,8 @@ class EquityGuard:
 
     def update(self, new_balance: float) -> None:
         self.current_balance = new_balance
-        drawdown = 1.0 - (self.current_balance / self.start_balance)
+        self.peak_balance    = max(self.peak_balance, new_balance)  # [BUG 2 FIX] ratchet up
+        drawdown = 1.0 - (self.current_balance / self.peak_balance)
 
         if drawdown >= self.hard_dd:
             if not self.halted:
@@ -139,7 +141,9 @@ class EquityGuard:
         return not self.halted
 
     def drawdown_pct(self) -> float:
-        return round((1.0 - self.current_balance / self.start_balance) * 100, 2)
+        if self.peak_balance <= 0:
+            return 0.0
+        return round((1.0 - self.current_balance / self.peak_balance) * 100, 2)
 
     def reset_halt(self) -> None:
         """Call manually after reviewing the account."""
