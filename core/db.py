@@ -259,13 +259,30 @@ def get_signal(path: str, signal_id: int) -> dict | None:
 
 
 def daily_pnl(path: str) -> float:
-    """[NEW — Step 5] Sum of P&L from trades closed today (UTC date). Negative = loss."""
-    today = datetime.now(timezone.utc).date().isoformat()
+    """[NEW — Step 5] Sum of P&L from trades closed since last session close (16:00 UTC).
+
+    [BUG 3 FIX] Previously reset at midnight UTC, but the trading session runs
+    12:00–16:00 UTC.  A loss at 15:00 and another at 12:30 next day were counted
+    separately.  Now uses session close (16:00 UTC) as the reset boundary so
+    consecutive-session losses accumulate correctly.
+    """
+    from core.config import SESSION_END_UTC  # avoid circular at module level
+    now = datetime.now(timezone.utc)
+    session_end_today = now.replace(
+        hour=SESSION_END_UTC.hour, minute=SESSION_END_UTC.minute,
+        second=0, microsecond=0,
+    )
+    # If we haven't reached today's session close yet, the boundary is yesterday's close
+    if now < session_end_today:
+        boundary = session_end_today - timedelta(days=1)
+    else:
+        boundary = session_end_today
+    boundary_str = boundary.strftime("%Y-%m-%d %H:%M:%S")
     with connect(path) as conn:
         row = conn.execute(
             "SELECT COALESCE(SUM(pnl), 0.0) FROM trades "
-            "WHERE status='closed' AND DATE(closed_at) = ?",
-            (today,),
+            "WHERE status='closed' AND closed_at >= ?",
+            (boundary_str,),
         ).fetchone()
     return float(row[0]) if row else 0.0
 
