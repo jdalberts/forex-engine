@@ -31,6 +31,7 @@ import pandas as pd
 
 from core import config
 from strategy.indicators import atr as _atr_shared  # [NEW — Step 9]
+from strategy.regime_detection import _adx_full
 
 log = logging.getLogger(__name__)
 
@@ -85,6 +86,9 @@ def trend_following_signal(bars: list[dict]) -> Optional[dict]:
     df["slow_ema"] = _ema(df["close"], SLOW_EMA_PERIOD)
     df["atr"]      = _atr(df)
 
+    # ADX direction indicators for trend confirmation
+    plus_di, minus_di, _ = _adx_full(df)
+
     # Current and previous bar values
     curr = df.iloc[-1]
     prev = df.iloc[-2]
@@ -123,6 +127,17 @@ def trend_following_signal(bars: list[dict]) -> Optional[dict]:
 
     if direction is None:
         return None
+
+    # ── ADX direction filter — confirm trend with +DI/-DI ────────────────────
+    pdi = float(plus_di.iloc[-1])
+    mdi = float(minus_di.iloc[-1])
+    if not pd.isna(pdi) and not pd.isna(mdi):
+        if direction == "long" and pdi <= mdi:
+            log.info("[trend] Bullish cross blocked — -DI (%.1f) > +DI (%.1f)", mdi, pdi)
+            return None
+        if direction == "short" and mdi <= pdi:
+            log.info("[trend] Bearish cross blocked — +DI (%.1f) > -DI (%.1f)", pdi, mdi)
+            return None
 
     # ── Stop and target (ATR-based, same as mean_reversion) ───────────────────
     entry = close
