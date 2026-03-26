@@ -89,13 +89,9 @@ System went from losing (PF 0.79) to profitable (PF 1.12, +8.5%/pair) after Step
 - [x] Step 3: Walk-forward validation — 42% OOS windows profitable, avg +0.11% (has edge)
 - [x] Step 4: Per-pair analysis — USDCHF +35%, GBPUSD +10%, GBPJPY -3.6%, EURUSD -7.6%
 - [x] Step 5: Enhancements tried — MACD filter killed MR signals, breakeven stop neutral
-- [ ] Step 6a: Pair selection decision — keep USDCHF+GBPUSD (profitable), keep GBPJPY (diversification, near breakeven), fix or drop EURUSD (-7.6%). Try per-pair optimization on EURUSD first, drop if still losing.
-- [ ] Step 6a-ii: Per-pair optimizer for EURUSD — may need different params or exclusion
+- [x] Step 6a: Pair selection — EURUSD dropped (unprofitable across all 256 param combos). Keeping USDCHF (+40.6%), GBPUSD (+6.2%), GBPJPY (-2.3% diversification)
 - [ ] Step 6b: ADX direction filter for TF — only long when +DI > -DI (improve trend signals)
-- [ ] Step 6c: Per-pair session windows — current 12-16 UTC is narrow (4h), test wider:
-  - EUR/GBP/CHF: test 08:00–17:00 UTC (full London + NY)
-  - GBPJPY: test 00:00–03:00 UTC (Tokyo session) as separate or additional window
-  - At minimum extend to 10:00–17:00 UTC to catch London open moves
+- [x] Step 6c: Session windows tested — 12-16 UTC confirmed optimal, wider windows hurt returns
 - [ ] Step 6d: Run full grid optimizer from CLI — quick grid was 256 combos, full is 209k
 - [ ] Step 6e: Re-validate walk-forward after refinements
 

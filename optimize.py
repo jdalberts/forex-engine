@@ -123,6 +123,24 @@ QUICK_GRID = {
     "trail_atr":       [1.5],
 }
 
+# Session window grid — keeps optimized params fixed, only varies session hours
+SESSION_GRID = {
+    "mr_rsi_os":       [25],
+    "mr_rsi_ob":       [75],
+    "mr_bb_std":       [2.0],
+    "mr_stop_mult":    [2.0],
+    "mr_target_mult":  [5.0],
+    "tf_fast_ema":     [20],
+    "tf_slow_ema":     [50],
+    "tf_stop_mult":    [2.5],
+    "tf_target_mult":  [6.0],
+    "adx_threshold":   [20],
+    "session_start":   [7, 8, 10, 12],
+    "session_end":     [16, 17, 18, 20],
+    "max_hold":        [30],
+    "trail_atr":       [1.5],
+}
+
 # Fixed params (not swept)
 FIXED = {
     "session_start": 12,
@@ -136,6 +154,7 @@ def generate_combos(grid: dict) -> list[dict]:
     values = list(grid.values())
     combos = []
     for vals in itertools.product(*values):
+        # FIXED provides defaults; grid values override them
         combo = {**FIXED, **dict(zip(keys, vals))}
         # Skip invalid combos
         if combo["mr_rsi_os"] >= combo["mr_rsi_ob"]:
@@ -146,6 +165,8 @@ def generate_combos(grid: dict) -> list[dict]:
             continue
         if combo["tf_target_mult"] <= combo["tf_stop_mult"]:
             continue
+        if combo.get("session_start", 12) >= combo.get("session_end", 16):
+            continue
         combos.append(combo)
     return combos
 
@@ -153,20 +174,21 @@ def generate_combos(grid: dict) -> list[dict]:
 def main():
     parser = argparse.ArgumentParser(description="Parameter optimizer")
     parser.add_argument("--quick", action="store_true", help="Fewer combos, faster")
+    parser.add_argument("--session", action="store_true", help="Session window sweep only (keeps other params fixed)")
     parser.add_argument("--mt5",   action="store_true", help="Fetch fresh bars from MT5")
     parser.add_argument("--symbol", default=None, help="Single pair (default: all)")
     parser.add_argument("--bars", type=int, default=10000, help="Max bars per pair (default 10000)")
     parser.add_argument("--top", type=int, default=20, help="Show top N results")
     args = parser.parse_args()
 
-    grid = QUICK_GRID if args.quick else FULL_GRID
+    grid = SESSION_GRID if args.session else (QUICK_GRID if args.quick else FULL_GRID)
     combos = generate_combos(grid)
 
     pairs = {args.symbol: config.PAIRS[args.symbol]} if args.symbol else config.PAIRS
     symbols = list(pairs.keys())
 
     print(f"\nPARAMETER OPTIMIZATION  |  {datetime.now():%Y-%m-%d %H:%M}")
-    print(f"Grid: {'QUICK' if args.quick else 'FULL'}")
+    print(f"Grid: {'SESSION' if args.session else 'QUICK' if args.quick else 'FULL'}")
     print(f"Pairs: {', '.join(symbols)}")
     print(f"Parameter combinations: {len(combos)}")
     print(f"Total backtests: {len(combos) * len(symbols)}")
