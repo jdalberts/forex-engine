@@ -104,27 +104,30 @@ System went from losing (PF 0.79) to profitable (PF 1.12, +8.5%/pair) after Step
 ### Phase 3B — Code Review Fixes (2026-03-26 review)
 
 #### Bugs — Fix Before Live
-- [ ] BUG 3: DailyLossGuard resets UTC midnight → fix to 16:00 UTC session close (`risk/guard.py`)
-- [ ] Replace bare `except Exception` with specific catches in engine.py (4+ locations)
+- [x] BUG 3: DailyLossGuard — already fixed in DB layer (uses 16:00 UTC session close)
+- [x] Replace bare `except Exception` with specific catches in engine.py (4 locations)
 - [ ] IG client: verify re-auth succeeded before retrying on 401 (`core/ig_client.py`)
-- [ ] MT5 client: fix timezone — uses `datetime.now()` which assumes local=UTC+2 (`core/mt5_client.py`)
-- [ ] Add max-position-per-pair limit = 1 (M2 from original review, still open) (`engine.py`)
+- [x] MT5 client: fix timezone — now uses UTC instead of local time
+- [x] Max-position-per-pair — already enforced in engine + gateway
 - [ ] News filter: fix DST transition calculation (`data/news_filter.py`)
-- [ ] Add MetaTrader5 to requirements.txt
+- [x] Add MetaTrader5 to requirements.txt
 - [ ] Remove hardcoded IG account ID default from config.py
 
 #### Code Cleanup
-- [ ] Remove dead `_vwap()` function from `strategy/mean_reversion.py`
-- [ ] Move `_adx_full()` from `regime_detection.py` to `strategy/indicators.py`
-- [ ] Remove unused MACD function from `strategy/indicators.py` (or integrate)
+- [x] Remove dead `_vwap()` function from `strategy/mean_reversion.py`
+- [x] Move `adx_full()` to `strategy/indicators.py` (shared, no longer private)
 - [ ] Remove orphaned test files: test_regime.py, test_switcher.py, test_trend.py
 - [ ] Create `.env.example` template
 
-#### Dashboard/UI Improvements
-- [ ] Add engine pause/resume button (emergency kill switch in UI)
-- [ ] Fix live PnL direction check — normalize "long"/"BUY" variants (`dashboard/app.py`)
-- [ ] Add error handling in `/api/state` — wrap regime/COT in try/except
-- [ ] Color-code drawdown display: green <2%, yellow 2-4%, orange 4-8%, red >8%
+#### Dashboard/UI — Done
+- [x] Pause/resume button (file-based engine pause, quotes keep flowing)
+- [x] Fix live PnL direction — normalizes "long"/"BUY" variants
+- [x] Error handling in `/api/state` — regime/COT wrapped in try/except
+- [x] Color-code drawdown: green <2%, yellow 2-4%, red >4%
+- [x] Dynamic pairs from API (no more hardcoded EURUSD)
+- [x] "Session PnL" label (was "Today's PnL")
+
+#### Dashboard/UI — Remaining
 - [ ] Add filter summary per pair ("USDCHF: Blocked — High Vol + News")
 - [ ] Add soft/hard drawdown limit lines to equity curve chart
 - [ ] Add trade entry/exit markers on equity curve
