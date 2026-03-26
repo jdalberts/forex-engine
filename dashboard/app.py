@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time as _time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,12 +16,17 @@ from data.news_filter import is_news_window, next_news_event, refresh_news_cache
 from strategy.cot_bias import CotBias
 from strategy.regime_detection import detect_market_regime
 
+log = logging.getLogger(__name__)
+
 app = FastAPI(title="Forex Engine Dashboard", docs_url=None, redoc_url=None)
 
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 _cot = CotBias(db_path=config.DB_PATH)
+
+# Pause file — engine checks this to decide whether to trade
+PAUSE_FILE = Path(config.DB_PATH).parent / ".engine_paused"
 
 # Backtest results cache — recomputed at most every 5 minutes
 _bt_cache: dict | None = None
@@ -128,22 +134,28 @@ def state():
                 mid   = (float(quote["bid"]) + float(quote["ask"])) / 2
                 entry = float(position["entry_price"])
                 size  = float(position["size"])
-                if position["direction"] == "long":
+                direction = position["direction"].lower()
+                is_long = direction in ("long", "buy")
+                if is_long:
                     live_pnl = round((mid - entry) * size, 2)
                 else:
                     live_pnl = round((entry - mid) * size, 2)
-            except Exception:
-                pass
+            except (KeyError, TypeError, ValueError) as exc:
+                log.debug("PnL calc failed for %s: %s", symbol, exc)
 
         regime = "unknown"
         try:
             bars = db.load_ohlc(db_path, symbol, timeframe="HOUR", limit=100)
             if len(bars) >= 40:
                 regime = detect_market_regime(bars)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("Regime detection failed for %s: %s", symbol, exc)
 
-        cot_bias = _cot.get_bias(symbol)
+        try:
+            cot_bias = _cot.get_bias(symbol)
+        except Exception as exc:
+            log.warning("COT bias failed for %s: %s", symbol, exc)
+            cot_bias = "neutral"
 
         last_signal = None
         with db.connect(db_path) as conn:
@@ -181,7 +193,27 @@ def state():
         "today_pnl":    db.daily_pnl(db_path),
         "news_active":  is_news_window(now),
         "next_event":   nxt.isoformat() if nxt else None,
+        "engine_paused": PAUSE_FILE.exists(),
+        "active_pairs":  list(config.PAIRS.keys()),
     })
+
+
+@app.post("/api/engine/pause")
+def pause_engine():
+    """Create pause file — engine checks this each cycle and skips trading."""
+    PAUSE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    PAUSE_FILE.write_text(datetime.now(timezone.utc).isoformat())
+    log.warning("ENGINE PAUSED via dashboard")
+    return JSONResponse({"status": "paused"})
+
+
+@app.post("/api/engine/resume")
+def resume_engine():
+    """Remove pause file — engine resumes trading next cycle."""
+    if PAUSE_FILE.exists():
+        PAUSE_FILE.unlink()
+    log.warning("ENGINE RESUMED via dashboard")
+    return JSONResponse({"status": "running"})
 
 
 def _trade_stats(db_path: str) -> dict:

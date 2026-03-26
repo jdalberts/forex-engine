@@ -190,6 +190,7 @@
       <span id="next-event-wrap" style="display:none"></span>
       <span id="news-pill" class="pill pill-muted">–</span>
       <span id="session-pill" class="pill pill-muted">–</span>
+      <button id="pause-btn" onclick="togglePause()" style="font-size:12px;cursor:pointer;padding:3px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:var(--font)" onmouseover="this.style.color='var(--yellow)'" onmouseout="this.style.color=this.dataset.paused==='true'?'var(--red)':'var(--muted)'">Pause</button>
       <a href="/backtest" style="font-size:12px;color:var(--muted);text-decoration:none;padding:3px 10px;border:1px solid var(--border);border-radius:6px" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--muted)'">Backtest</a>
       <span id="last-update">–</span>
     </div>
@@ -254,7 +255,7 @@
         </div>
         <hr class="stat-divider">
         <div class="stat-item">
-          <span class="stat-label">Today's PnL</span>
+          <span class="stat-label">Session PnL</span>
           <span class="stat-value" id="today-pnl">–</span>
         </div>
         <div class="stat-item">
@@ -393,8 +394,22 @@
     return isoStr.replace('T', ' ').slice(0, 16) + ' UTC';
   }
 
-  const PAIRS = ['EURUSD', 'GBPUSD', 'USDCHF', 'GBPJPY'];
+  let PAIRS = ['GBPUSD', 'USDCHF', 'GBPJPY'];  // updated from API on first refresh
   const START = 20000;
+  let _pairsInitialized = false;
+
+  async function togglePause() {
+    const btn = $('pause-btn');
+    const isPaused = btn.dataset.paused === 'true';
+    const url = isPaused ? '/api/engine/resume' : '/api/engine/pause';
+    try {
+      await fetch(url, { method: 'POST' });
+      btn.dataset.paused = isPaused ? 'false' : 'true';
+      btn.textContent = isPaused ? 'Pause' : 'RESUME';
+      btn.style.color = isPaused ? 'var(--muted)' : 'var(--red)';
+      btn.style.borderColor = isPaused ? 'var(--border)' : 'var(--red)';
+    } catch {}
+  }
 
   // ── Build quote cards once ────────────────────────────────────────────────
   PAIRS.forEach(sym => {
@@ -438,6 +453,53 @@
     const now = new Date();
     const utcMins = now.getUTCHours() * 60 + now.getUTCMinutes();
     const sessionOpen = utcMins >= 720 && utcMins < 960;
+
+    // Update PAIRS from API on first load
+    if (!_pairsInitialized && data.active_pairs) {
+      PAIRS = data.active_pairs;
+      $('quotes-grid').innerHTML = '';
+      $('filter-grid').innerHTML = '';
+      PAIRS.forEach(sym => {
+        const label = sym.slice(0,3) + ' / ' + sym.slice(3);
+        $('quotes-grid').innerHTML += `
+          <div class="card" id="qcard-${sym}">
+            <div class="quote-pair">${label}</div>
+            <div><span class="quote-label">BID</span><span class="quote-bid" id="bid-${sym}">–</span></div>
+            <div style="margin-top:3px"><span class="quote-label">ASK</span><span class="quote-ask" id="ask-${sym}">–</span></div>
+            <div class="quote-spread" id="spread-${sym}">Spread: –</div>
+            <div class="quote-footer" id="qfooter-${sym}">
+              <span id="regime-tag-${sym}"></span>
+              <span id="lastsig-${sym}" style="font-size:11px;color:var(--muted)"></span>
+            </div>
+          </div>`;
+      });
+      PAIRS.forEach(sym => {
+        const label = sym.slice(0,3) + '/' + sym.slice(3);
+        $('filter-grid').innerHTML += `
+          <div class="filter-col">
+            <div class="filter-pair-label">${label}</div>
+            <div class="filter-row"><span class="filter-key">Regime</span><span id="flt-regime-${sym}">–</span></div>
+            <div class="filter-row"><span class="filter-key">COT Bias</span><span id="flt-cot-${sym}">–</span></div>
+            <div class="filter-row"><span class="filter-key">Session</span><span id="flt-session-${sym}">–</span></div>
+            <div class="filter-row"><span class="filter-key">News</span><span id="flt-news-${sym}">–</span></div>
+          </div>`;
+      });
+      _pairsInitialized = true;
+    }
+
+    // Update pause button state
+    const pauseBtn = $('pause-btn');
+    if (data.engine_paused) {
+      pauseBtn.dataset.paused = 'true';
+      pauseBtn.textContent = 'RESUME';
+      pauseBtn.style.color = 'var(--red)';
+      pauseBtn.style.borderColor = 'var(--red)';
+    } else {
+      pauseBtn.dataset.paused = 'false';
+      pauseBtn.textContent = 'Pause';
+      pauseBtn.style.color = 'var(--muted)';
+      pauseBtn.style.borderColor = 'var(--border)';
+    }
 
     // ── Header pills ───────────────────────────────────────────────────────
     const pill = $('session-pill');
@@ -516,9 +578,14 @@
     if (eq && eq.length > 0) {
       const latest = parseFloat(eq[eq.length - 1].balance);
       const dd = ((START - latest) / START * 100).toFixed(2);
+      const ddVal = parseFloat(dd);
       const ddEl = $('drawdown');
       ddEl.textContent = dd + '%';
-      ddEl.className = parseFloat(dd) > 0 ? 'stat-value val-red' : 'stat-value val-green';
+      // Color: green <2%, yellow 2-4%, red-orange 4-8%, red >8%
+      ddEl.className = ddVal <= 0 ? 'stat-value val-green'
+                     : ddVal < 2 ? 'stat-value val-green'
+                     : ddVal < 4 ? 'stat-value val-yellow'
+                     : 'stat-value val-red';
       const balEl = $('balance');
       balEl.textContent = fmtMoney(latest);
       balEl.className = latest >= START ? 'stat-value val-green' : 'stat-value val-red';

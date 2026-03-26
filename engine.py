@@ -332,6 +332,13 @@ def run(dry_run: bool = True) -> None:
             if not in_session:
                 continue
 
+            # 2b. Dashboard pause check — skip trading but keep quotes flowing
+            _pause_file = pathlib.Path(config.DB_PATH).parent / ".engine_paused"
+            if _pause_file.exists():
+                if symbol == list(pairs.keys())[0]:  # log once per cycle
+                    log.info("Engine PAUSED via dashboard — skipping all signals")
+                continue
+
             # 2b. [NEW — Step 11] News filter — pause during high-impact releases
             if config.NEWS_FILTER_ENABLED and is_news_window(now):
                 log.info("[%s] News window active — skipping signal", symbol)
