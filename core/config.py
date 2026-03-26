@@ -58,7 +58,7 @@ SOFT_DRAWDOWN: float     = 0.04    # 4 % → scale risk down to 25 %  [was 0.02 
 HARD_DRAWDOWN: float     = 0.08    # 8 % → halt trading entirely    [was 0.04 — 4% halt was very aggressive; 8% is industry standard]
 MAX_SPREAD_PIPS: float   = 2.0     # reject if spread wider than 2 pips
 DAILY_LOSS_LIMIT: float  = 0.03    # [NEW — Step 5] pause if today's loss exceeds 3 % of balance
-TRAILING_ATR_MULT: float = 1.5     # trailing stop distance in ATR units [optim: was 1.2 → 1.5 don't choke winners]
+TRAILING_ATR_MULT: float = 2.0     # trailing stop distance in ATR units [optim2: was 1.5 → 2.0 let winners breathe]
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 DB_PATH: str        = os.environ.get("DB_PATH", "data/forex_engine.db")
@@ -83,17 +83,17 @@ MR_VWAP_WINDOW: int      = 20    # VWAP rolling window (kept — _vwap still use
 MR_BB_PERIOD: int        = 20    # [NEW — Step 18] Bollinger Band rolling window
 MR_BB_STD_DEV: float     = 2.0   # [NEW — Step 18] standard deviation multiplier (±2σ ≈ 5% of bars)
 MR_ATR_PERIOD: int       = 14    # ATR lookback period
-MR_RSI_OVERSOLD: float   = 25.0  # RSI below this → long signal candidate  [optim: was 30 → 25 for higher conviction]
-MR_RSI_OVERBOUGHT: float = 75.0  # RSI above this → short signal candidate [optim: was 70 → 75 for higher conviction]
-MR_STOP_ATR_MULT: float  = 2.0   # stop distance = this × ATR              [optim: was 1.5 → 2.0 fewer noise stop-outs]
-MR_TARGET_ATR_MULT: float = 5.0  # target distance = this × ATR  (2.5:1 R/R) [optim: was 3.0 → 5.0 bigger winners]
+MR_RSI_OVERSOLD: float   = 25.0  # RSI below this → long signal candidate
+MR_RSI_OVERBOUGHT: float = 70.0  # RSI above this → short signal candidate [optim2: was 75 → 70 wider MR window]
+MR_STOP_ATR_MULT: float  = 1.5   # stop distance = this × ATR              [optim2: was 2.0 → 1.5 tighter MR stops]
+MR_TARGET_ATR_MULT: float = 5.0  # target distance = this × ATR  (3.3:1 R/R)
 
 # ── Strategy: Trend Following ──────────────────────────────────────────────────
-TF_FAST_EMA_PERIOD: int  = 20    # fast EMA period for crossover              [optim: was 12 → 20 fewer false crossovers]
-TF_SLOW_EMA_PERIOD: int  = 50    # slow EMA period for crossover              [optim: was 26 → 50 paired with fast=20]
+TF_FAST_EMA_PERIOD: int  = 20    # fast EMA period for crossover
+TF_SLOW_EMA_PERIOD: int  = 50    # slow EMA period for crossover
 TF_ATR_PERIOD: int       = 14    # ATR lookback period
-TF_STOP_ATR_MULT: float  = 2.5   # stop distance = this × ATR                [optim: was 2.0 → 2.5 trends need room]
-TF_TARGET_ATR_MULT: float = 6.0  # target distance = this × ATR  (2.4:1 R/R) [optim: was 4.0 → 6.0 let winners run]
+TF_STOP_ATR_MULT: float  = 3.0   # stop distance = this × ATR                [optim2: was 2.5 → 3.0 wider trend stops]
+TF_TARGET_ATR_MULT: float = 8.0  # target distance = this × ATR  (2.7:1 R/R) [optim2: was 6.0 → 8.0 let big trends run]
 
 # ── Strategy: Regime Detection ─────────────────────────────────────────────────
 REGIME_ADX_PERIOD: int       = 14   # ADX / DI smoothing period

@@ -39,12 +39,12 @@ log = logging.getLogger("backtest")
 
 # ── Simulation parameters ──────────────────────────────────────────────────────
 WARMUP_BARS        = 50     # bars discarded at start to let indicators warm up
-MAX_HOLD_BARS      = 30     # force-close a position after this many bars [optim: was 20 → 30]
+MAX_HOLD_BARS      = 40     # force-close a position after this many bars [optim2: was 30 → 40]
 SPREAD_COST_PIPS   = 2.0    # round-trip spread deducted from every trade (entry + exit)
 SLIPPAGE_PIPS      = 0.5    # [NEW] execution slippage per trade (on top of spread)
 SESSION_START_HOUR = 12     # UTC hour — match live engine session gate
 SESSION_END_HOUR   = 16     # UTC hour — match live engine session gate
-TRAILING_ATR_MULT  = 1.5    # trailing stop distance for trend trades [optim: was 1.2 → 1.5]
+TRAILING_ATR_MULT  = 2.0    # trailing stop distance for trend trades [optim2: was 1.5 → 2.0]
 
 # Import indicator constants and functions from existing strategy modules
 # (same calculations as live trading — no duplication)
