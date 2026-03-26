@@ -107,6 +107,22 @@ FULL_GRID = {
     "trail_atr":       [1.2, 1.5, 2.0],
 }
 
+MEDIUM_GRID = {
+    "mr_rsi_os":       [20, 25, 30],
+    "mr_rsi_ob":       [70, 75, 80],
+    "mr_bb_std":       [2.0, 2.5],
+    "mr_stop_mult":    [1.5, 2.0, 2.5],
+    "mr_target_mult":  [4.0, 5.0, 6.0],
+    "tf_fast_ema":     [20],              # confirmed best
+    "tf_slow_ema":     [50],              # confirmed best
+    "tf_stop_mult":    [2.5, 3.0],
+    "tf_target_mult":  [6.0, 8.0],
+    "adx_threshold":   [20],              # confirmed best
+    "session_end":     [16],              # confirmed optimal
+    "max_hold":        [30, 40],
+    "trail_atr":       [1.5, 2.0],
+}
+
 QUICK_GRID = {
     "mr_rsi_os":       [20, 25],
     "mr_rsi_ob":       [75, 80],
@@ -173,7 +189,8 @@ def generate_combos(grid: dict) -> list[dict]:
 
 def main():
     parser = argparse.ArgumentParser(description="Parameter optimizer")
-    parser.add_argument("--quick", action="store_true", help="Fewer combos, faster")
+    parser.add_argument("--quick", action="store_true", help="Fewer combos, faster (~256)")
+    parser.add_argument("--medium", action="store_true", help="Medium grid (~3000 combos, ~1-2 hours)")
     parser.add_argument("--session", action="store_true", help="Session window sweep only (keeps other params fixed)")
     parser.add_argument("--mt5",   action="store_true", help="Fetch fresh bars from MT5")
     parser.add_argument("--symbol", default=None, help="Single pair (default: all)")
@@ -181,14 +198,14 @@ def main():
     parser.add_argument("--top", type=int, default=20, help="Show top N results")
     args = parser.parse_args()
 
-    grid = SESSION_GRID if args.session else (QUICK_GRID if args.quick else FULL_GRID)
+    grid = SESSION_GRID if args.session else (QUICK_GRID if args.quick else (MEDIUM_GRID if args.medium else FULL_GRID))
     combos = generate_combos(grid)
 
     pairs = {args.symbol: config.PAIRS[args.symbol]} if args.symbol else config.PAIRS
     symbols = list(pairs.keys())
 
     print(f"\nPARAMETER OPTIMIZATION  |  {datetime.now():%Y-%m-%d %H:%M}")
-    print(f"Grid: {'SESSION' if args.session else 'QUICK' if args.quick else 'FULL'}")
+    print(f"Grid: {'SESSION' if args.session else 'QUICK' if args.quick else 'MEDIUM' if args.medium else 'FULL'}")
     print(f"Pairs: {', '.join(symbols)}")
     print(f"Parameter combinations: {len(combos)}")
     print(f"Total backtests: {len(combos) * len(symbols)}")
