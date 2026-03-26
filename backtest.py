@@ -62,7 +62,7 @@ from strategy.trend_following import (
 from strategy.regime_detection import (
     ADX_PERIOD, ADX_TREND_THRESHOLD,
     ATR_SPIKE_WINDOW, ATR_SPIKE_MULT,
-    _adx, _atr as _rd_atr,
+    _adx, _adx_full, _atr as _rd_atr,
 )
 from strategy.indicators import macd as _macd
 
@@ -84,8 +84,8 @@ def _add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["tf_slow"]  = _ema(df["close"], SLOW_EMA_PERIOD)
     df["tf_atr"]   = _tf_atr(df)
 
-    # Regime detection indicators
-    df["rd_adx"]      = _adx(df, ADX_PERIOD)
+    # Regime detection indicators (with +DI/-DI for trend direction filter)
+    df["rd_plus_di"], df["rd_minus_di"], df["rd_adx"] = _adx_full(df, ADX_PERIOD)
     df["rd_atr"]      = _rd_atr(df)
     df["rd_atr_base"] = df["rd_atr"].rolling(ATR_SPIKE_WINDOW).mean()
 
@@ -122,7 +122,12 @@ def _mean_rev_signal(row: pd.Series, prev: pd.Series = None) -> Optional[dict]:
 
 
 def _trend_signal(row: pd.Series, prev: pd.Series) -> Optional[dict]:
-    """Generate EMA crossover signal from pre-computed rows — returns dict or None."""
+    """Generate EMA crossover signal from pre-computed rows — returns dict or None.
+
+    ADX direction filter: only long when +DI > -DI (bulls stronger),
+    only short when -DI > +DI (bears stronger). Filters out crossovers
+    that go against the dominant directional movement.
+    """
     fn, sn = row["tf_fast"],  row["tf_slow"]
     fp, sp = prev["tf_fast"], prev["tf_slow"]
     atr     = row["tf_atr"]
@@ -134,6 +139,16 @@ def _trend_signal(row: pd.Series, prev: pd.Series) -> Optional[dict]:
     if not bullish and not bearish:
         return None
     direction = "long" if bullish else "short"
+
+    # ADX direction filter — confirm trend direction with +DI/-DI
+    plus_di  = row.get("rd_plus_di")
+    minus_di = row.get("rd_minus_di")
+    if plus_di is not None and minus_di is not None and not pd.isna(plus_di) and not pd.isna(minus_di):
+        if direction == "long" and plus_di <= minus_di:
+            return None  # bullish crossover but bears still dominate — skip
+        if direction == "short" and minus_di <= plus_di:
+            return None  # bearish crossover but bulls still dominate — skip
+
     entry = close
     if direction == "long":
         stop, target = entry - TF_STOP_MULT * atr, entry + TF_TARGET_MULT * atr

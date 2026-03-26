@@ -53,6 +53,17 @@ def _adx(df: pd.DataFrame, period: int = ADX_PERIOD) -> pd.Series:
     Returns a Series of ADX values aligned to df's index.
     Values below period*2 rows will be NaN — need enough bars to warm up.
     """
+    _, _, adx = _adx_full(df, period)
+    return adx
+
+
+def _adx_full(df: pd.DataFrame, period: int = ADX_PERIOD) -> tuple:
+    """
+    ADX with directional indicators.
+
+    Returns (plus_di, minus_di, adx) — all pd.Series.
+    plus_di > minus_di → bullish trend, minus_di > plus_di → bearish trend.
+    """
     high  = df["high"]
     low   = df["low"]
     close = df["close"]
@@ -84,7 +95,7 @@ def _adx(df: pd.DataFrame, period: int = ADX_PERIOD) -> pd.Series:
     dx      = 100 * (plus_di - minus_di).abs() / di_sum
     adx     = dx.ewm(alpha=alpha, adjust=False).mean()
 
-    return adx
+    return plus_di, minus_di, adx
 
 
 # ── [NEW] Regime detection ────────────────────────────────────────────────────
