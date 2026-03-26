@@ -40,10 +40,10 @@ PAIRS: dict = {
     # epic:        IG instrument ID (used when BROKER=ig)
     # mt5_symbol:  MT5 symbol name  (used when BROKER=mt5)
     # price_scale: divide raw IG price by this (MT5 always returns readable prices, uses 1)
-    "EURUSD": {"epic": "CS.D.EURUSD.CFD.IP", "mt5_symbol": "EURUSD.a", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0,  "price_scale": 10000},
-    "GBPUSD": {"epic": "CS.D.GBPUSD.CFD.IP", "mt5_symbol": "GBPUSD.a", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0,  "price_scale": 1},
-    "USDCHF": {"epic": "CS.D.USDCHF.CFD.IP", "mt5_symbol": "USDCHF.a", "currency": "CHF", "pip_size": 0.0001, "pip_value_usd": 12.5,  "price_scale": 1},
-    "GBPJPY": {"epic": "CS.D.GBPJPY.CFD.IP", "mt5_symbol": "GBPJPY.a", "currency": "JPY", "pip_size": 0.01,   "pip_value_usd":  6.3,  "price_scale": 1},
+    "EURUSD": {"epic": "CS.D.EURUSD.CFD.IP", "mt5_symbol": "EURUSD", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0,  "price_scale": 10000},
+    "GBPUSD": {"epic": "CS.D.GBPUSD.CFD.IP", "mt5_symbol": "GBPUSD", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0,  "price_scale": 1},
+    "USDCHF": {"epic": "CS.D.USDCHF.CFD.IP", "mt5_symbol": "USDCHF", "currency": "CHF", "pip_size": 0.0001, "pip_value_usd": 12.5,  "price_scale": 1},
+    "GBPJPY": {"epic": "CS.D.GBPJPY.CFD.IP", "mt5_symbol": "GBPJPY", "currency": "JPY", "pip_size": 0.01,   "pip_value_usd":  6.3,  "price_scale": 1},
 }
 
 # ── Session window (UTC) ──────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ SOFT_DRAWDOWN: float     = 0.04    # 4 % → scale risk down to 25 %  [was 0.02 
 HARD_DRAWDOWN: float     = 0.08    # 8 % → halt trading entirely    [was 0.04 — 4% halt was very aggressive; 8% is industry standard]
 MAX_SPREAD_PIPS: float   = 2.0     # reject if spread wider than 2 pips
 DAILY_LOSS_LIMIT: float  = 0.03    # [NEW — Step 5] pause if today's loss exceeds 3 % of balance
-TRAILING_ATR_MULT: float = 1.2     # [NEW — Step 5] trailing stop distance in ATR units (trending trades) [was 0.8 — too tight, stopped trend trades early]
+TRAILING_ATR_MULT: float = 1.5     # trailing stop distance in ATR units [optim: was 1.2 → 1.5 don't choke winners]
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 DB_PATH: str        = os.environ.get("DB_PATH", "data/forex_engine.db")
@@ -83,21 +83,21 @@ MR_VWAP_WINDOW: int      = 20    # VWAP rolling window (kept — _vwap still use
 MR_BB_PERIOD: int        = 20    # [NEW — Step 18] Bollinger Band rolling window
 MR_BB_STD_DEV: float     = 2.0   # [NEW — Step 18] standard deviation multiplier (±2σ ≈ 5% of bars)
 MR_ATR_PERIOD: int       = 14    # ATR lookback period
-MR_RSI_OVERSOLD: float   = 30.0  # RSI below this → long signal candidate  [was 35.0 — tighter filter, fewer but higher-conviction longs]
-MR_RSI_OVERBOUGHT: float = 70.0  # RSI above this → short signal candidate [was 65.0 — tighter filter, fewer but higher-conviction shorts]
-MR_STOP_ATR_MULT: float  = 1.5   # stop distance = this × ATR              [was 0.8 — stops were too tight, frequently stopped out by noise]
-MR_TARGET_ATR_MULT: float = 3.0  # target distance = this × ATR  (2 : 1 R/R) [was 1.6 — target too small relative to stop; now 2:1 R/R maintained]
+MR_RSI_OVERSOLD: float   = 25.0  # RSI below this → long signal candidate  [optim: was 30 → 25 for higher conviction]
+MR_RSI_OVERBOUGHT: float = 75.0  # RSI above this → short signal candidate [optim: was 70 → 75 for higher conviction]
+MR_STOP_ATR_MULT: float  = 2.0   # stop distance = this × ATR              [optim: was 1.5 → 2.0 fewer noise stop-outs]
+MR_TARGET_ATR_MULT: float = 5.0  # target distance = this × ATR  (2.5:1 R/R) [optim: was 3.0 → 5.0 bigger winners]
 
 # ── Strategy: Trend Following ──────────────────────────────────────────────────
-TF_FAST_EMA_PERIOD: int  = 12    # fast EMA period for crossover              [was 9 — 12/26 is the standard MACD signal pair, more reliable]
-TF_SLOW_EMA_PERIOD: int  = 26    # slow EMA period for crossover              [was 21 — paired with fast=12 for MACD-style crossover]
+TF_FAST_EMA_PERIOD: int  = 20    # fast EMA period for crossover              [optim: was 12 → 20 fewer false crossovers]
+TF_SLOW_EMA_PERIOD: int  = 50    # slow EMA period for crossover              [optim: was 26 → 50 paired with fast=20]
 TF_ATR_PERIOD: int       = 14    # ATR lookback period
-TF_STOP_ATR_MULT: float  = 2.0   # stop distance = this × ATR                [was 0.8 — trend trades need room; 2× ATR avoids premature stop-outs]
-TF_TARGET_ATR_MULT: float = 4.0  # target distance = this × ATR  (2 : 1 R/R) [was 1.6 — 4× ATR target with 2× ATR stop maintains 2:1 R/R]
+TF_STOP_ATR_MULT: float  = 2.5   # stop distance = this × ATR                [optim: was 2.0 → 2.5 trends need room]
+TF_TARGET_ATR_MULT: float = 6.0  # target distance = this × ATR  (2.4:1 R/R) [optim: was 4.0 → 6.0 let winners run]
 
 # ── Strategy: Regime Detection ─────────────────────────────────────────────────
 REGIME_ADX_PERIOD: int       = 14   # ADX / DI smoothing period
-REGIME_ADX_THRESHOLD: float  = 25.0 # ADX >= this → trending regime
+REGIME_ADX_THRESHOLD: float  = 20.0 # ADX >= this → trending regime [optim: was 25 → 20 more time in trend mode]
 REGIME_ATR_PERIOD: int       = 14   # ATR lookback for spike detection
 REGIME_ATR_SPIKE_WINDOW: int = 20   # rolling window for baseline ATR mean
 REGIME_ATR_SPIKE_MULT: float = 2.0  # current ATR > this × baseline → high_volatility [was 1.5 — too sensitive; minor vol spikes paused all trading]

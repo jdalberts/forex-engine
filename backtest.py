@@ -6,14 +6,13 @@ values at bar i are computed from bars 0..i only (vectorised EWM/rolling handles
 this correctly because pandas computes each value from prior rows only).
 
 Assumptions / simplifications:
-  - Entry at CLOSE of signal bar (slightly optimistic; next-bar-open is more
-    realistic but requires an extra bar of lag and doesn't change conclusions)
+  - Entry at OPEN of bar after signal (next-bar-open — realistic, no lookahead)
   - Exit checked using bar HIGH and LOW; if both stop and target are in the
     same bar, stop is assumed to hit first (conservative)
   - Max holding period: MAX_HOLD_BARS — position force-closed at bar close
   - One position per symbol at a time (matches live engine behaviour)
-  - Trailing stop NOT simulated (fixed stop/target only); in live trading the
-    trailing stop will improve hybrid-strategy results further
+  - Trailing stop simulated for trend_following trades (1.2× ATR ratchet)
+  - Spread (2 pips) + slippage (0.5 pips) deducted per trade
 
 Usage (PowerShell from project root):
     python backtest.py                      # use DB data (must have run engine first)
@@ -40,10 +39,12 @@ log = logging.getLogger("backtest")
 
 # ── Simulation parameters ──────────────────────────────────────────────────────
 WARMUP_BARS        = 50     # bars discarded at start to let indicators warm up
-MAX_HOLD_BARS      = 20     # force-close a position after this many bars
-SPREAD_COST_PIPS   = 2.0    # [NEW] round-trip spread deducted from every trade (entry + exit)
-SESSION_START_HOUR = 12     # [NEW] UTC hour — match live engine session gate
-SESSION_END_HOUR   = 16     # [NEW] UTC hour — match live engine session gate
+MAX_HOLD_BARS      = 30     # force-close a position after this many bars [optim: was 20 → 30]
+SPREAD_COST_PIPS   = 2.0    # round-trip spread deducted from every trade (entry + exit)
+SLIPPAGE_PIPS      = 0.5    # [NEW] execution slippage per trade (on top of spread)
+SESSION_START_HOUR = 12     # UTC hour — match live engine session gate
+SESSION_END_HOUR   = 16     # UTC hour — match live engine session gate
+TRAILING_ATR_MULT  = 1.5    # trailing stop distance for trend trades [optim: was 1.2 → 1.5]
 
 # Import indicator constants and functions from existing strategy modules
 # (same calculations as live trading — no duplication)
@@ -63,6 +64,7 @@ from strategy.regime_detection import (
     ATR_SPIKE_WINDOW, ATR_SPIKE_MULT,
     _adx, _atr as _rd_atr,
 )
+from strategy.indicators import macd as _macd
 
 
 # ── Indicator pre-computation ──────────────────────────────────────────────────
@@ -87,16 +89,19 @@ def _add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["rd_atr"]      = _rd_atr(df)
     df["rd_atr_base"] = df["rd_atr"].rolling(ATR_SPIKE_WINDOW).mean()
 
+    # MACD histogram for momentum filter
+    _, _, df["macd_hist"] = _macd(df["close"], fast=12, slow=26, signal=9)
+
     return df
 
 
 # ── Per-bar signal generation ──────────────────────────────────────────────────
 
-def _mean_rev_signal(row: pd.Series) -> Optional[dict]:
+def _mean_rev_signal(row: pd.Series, prev: pd.Series = None) -> Optional[dict]:
     """Generate mean reversion signal from pre-computed row — returns dict or None."""
     rsi      = row["mr_rsi"]
-    bb_upper = row["mr_bb_upper"]   # [Step 18] replaced vwap
-    bb_lower = row["mr_bb_lower"]   # [Step 18] replaced vwap
+    bb_upper = row["mr_bb_upper"]
+    bb_lower = row["mr_bb_lower"]
     close    = float(row["close"])
     atr      = row["mr_atr"]
     if any(pd.isna(v) for v in [rsi, bb_upper, bb_lower, atr]) or atr <= 0:
@@ -168,6 +173,49 @@ def _check_exit(row: pd.Series, pos: dict):
     return False, None, None
 
 
+def _breakeven_stop(pos: dict, row: pd.Series) -> dict:
+    """Move stop to entry once price reaches 1:1 R (stop distance of profit)."""
+    if pos.get("breakeven_set"):
+        return pos
+    entry = pos["entry"]
+    stop_dist = abs(entry - pos.get("original_stop", pos["stop"]))
+    price = float(row["close"])
+    if pos["direction"] == "long":
+        if price >= entry + stop_dist:  # 1:1 R reached
+            if entry > pos["stop"]:
+                pos["stop"] = entry
+                pos["breakeven_set"] = True
+    else:
+        if price <= entry - stop_dist:  # 1:1 R reached
+            if entry < pos["stop"]:
+                pos["stop"] = entry
+                pos["breakeven_set"] = True
+    return pos
+
+
+def _trail_stop(pos: dict, row: pd.Series) -> dict:
+    """Update trailing stop for trend_following trades. Mutates and returns pos."""
+    if pos["strategy"] != "trend_following":
+        return pos
+    atr = row.get("tf_atr")
+    if pd.isna(atr) or atr <= 0:
+        return pos
+    price = float(row["close"])
+    best = pos.get("best_price", pos["entry"])
+    if pos["direction"] == "long":
+        best = max(best, price)
+        new_stop = round(best - TRAILING_ATR_MULT * atr, 5)
+        if new_stop > pos["stop"]:
+            pos["stop"] = new_stop
+    else:
+        best = min(best, price)
+        new_stop = round(best + TRAILING_ATR_MULT * atr, 5)
+        if new_stop < pos["stop"]:
+            pos["stop"] = new_stop
+    pos["best_price"] = best
+    return pos
+
+
 def _size(signal: dict, balance: float, pair_cfg: dict,
           risk_fraction: float = config.RISK_PER_TRADE) -> int:
     """Position size in contracts — identical logic to PositionSizer (Fix 3)."""
@@ -181,12 +229,13 @@ def _size(signal: dict, balance: float, pair_cfg: dict,
 
 
 def _pnl(pos: dict, exit_price: float, pair_cfg: dict,
-         spread_pips: float = SPREAD_COST_PIPS) -> float:
-    """Realised P&L in USD for a closed position, including round-trip spread cost."""
+         spread_pips: float = SPREAD_COST_PIPS,
+         slippage_pips: float = SLIPPAGE_PIPS) -> float:
+    """Realised P&L in USD for a closed position, including spread + slippage."""
     pip_size = pair_cfg["pip_size"]
     pips = ((exit_price - pos["entry"]) / pip_size if pos["direction"] == "long"
             else (pos["entry"] - exit_price) / pip_size)
-    pips -= spread_pips   # deduct round-trip spread (entry half + exit half)
+    pips -= (spread_pips + slippage_pips)   # deduct spread + slippage
     return round(pips * pos["contracts"] * pair_cfg["pip_value_usd"], 2)
 
 
@@ -220,13 +269,45 @@ def run_backtest(
     equity_curve = [balance]
     trades       = []
     open_pos     = None
+    pending_signal = None   # [NEW] queue signal for next-bar-open entry
 
     for i in range(WARMUP_BARS, len(df)):
         row  = df.iloc[i]
         prev = df.iloc[i - 1]
 
+        # ── Fill pending signal at this bar's OPEN (next-bar entry) ────────
+        if pending_signal is not None and open_pos is None:
+            sig   = pending_signal
+            entry = float(row["open"])
+            atr_val = sig.get("_atr", 0)
+            # Recalculate stop/target from actual entry price
+            if sig["direction"] == "long":
+                stop   = entry - sig["_stop_mult"] * atr_val
+                target = entry + sig["_target_mult"] * atr_val
+            else:
+                stop   = entry + sig["_stop_mult"] * atr_val
+                target = entry - sig["_target_mult"] * atr_val
+            open_pos = {
+                "entry_bar":     i,
+                "entry":         round(entry, 5),
+                "stop":          round(stop, 5),
+                "original_stop": round(stop, 5),
+                "target":        round(target, 5),
+                "direction":     sig["direction"],
+                "strategy":      sig["strategy"],
+                "contracts":     _size({"entry": entry, "stop": stop, "target": target,
+                                        "direction": sig["direction"]}, balance, pair_cfg),
+                "best_price":    entry,
+                "breakeven_set": False,
+            }
+            pending_signal = None
+
         # ── Check if open position exits on this bar ───────────────────────
         if open_pos:
+            # Apply trailing stop before exit check
+            if i > open_pos["entry_bar"]:
+                open_pos = _trail_stop(open_pos, prev)
+
             exited, exit_price, result = _check_exit(row, open_pos)
             if not exited and (i - open_pos["entry_bar"]) >= MAX_HOLD_BARS:
                 exited, exit_price, result = True, float(row["close"]), "timeout"
@@ -238,11 +319,11 @@ def run_backtest(
                                "exit_price": exit_price, "result": result, "pnl": pnl})
                 open_pos = None
 
-        # ── Generate signal if flat ────────────────────────────────────────
-        if open_pos is None:
+        # ── Generate signal if flat (queued for next-bar-open entry) ───────
+        if open_pos is None and pending_signal is None:
             signal = None
 
-            # [NEW] Session gate — skip entry outside 12:00–16:00 UTC
+            # Session gate — skip entry outside 12:00–16:00 UTC
             if session_filter:
                 bar_hour = row["time"].hour if hasattr(row["time"], "hour") else pd.to_datetime(row["time"]).hour
                 if not (SESSION_START_HOUR <= bar_hour < SESSION_END_HOUR):
@@ -252,23 +333,22 @@ def run_backtest(
             if use_regime:
                 reg = _regime(row)
                 if reg == "ranging":
-                    signal = _mean_rev_signal(row)
+                    signal = _mean_rev_signal(row, prev)
                 elif reg == "trending":
                     signal = _trend_signal(row, prev)
                 # else: high_volatility → no signal
             else:
-                signal = _mean_rev_signal(row)   # baseline: always mean reversion
+                signal = _mean_rev_signal(row, prev)   # baseline: always mean reversion
 
             if signal:
-                open_pos = {
-                    "entry_bar": i,
-                    "entry":     signal["entry"],
-                    "stop":      signal["stop"],
-                    "target":    signal["target"],
-                    "direction": signal["direction"],
-                    "strategy":  signal["strategy"],
-                    "contracts": _size(signal, balance, pair_cfg),
-                }
+                # Queue for next-bar open — store ATR and multipliers for recalculation
+                atr_key = "mr_atr" if signal["strategy"] == "mean_reversion" else "tf_atr"
+                stop_mult = MR_STOP_MULT if signal["strategy"] == "mean_reversion" else TF_STOP_MULT
+                target_mult = MR_TARGET_MULT if signal["strategy"] == "mean_reversion" else TF_TARGET_MULT
+                signal["_atr"] = row[atr_key]
+                signal["_stop_mult"] = stop_mult
+                signal["_target_mult"] = target_mult
+                pending_signal = signal
 
         equity_curve.append(balance)
 
@@ -391,6 +471,37 @@ def _fetch_from_yahoo(symbol: str, max_bars: int = 1500) -> list[dict]:    # [NE
         return []
 
 
+def _fetch_from_mt5(symbol: str, max_bars: int = 50000) -> list[dict]:
+    """Fetch OHLC history from MT5 terminal — up to 50,000 H1 bars (~8 years)."""
+    try:
+        from core.mt5_client import MT5Client
+        import MetaTrader5 as mt5
+
+        client = MT5Client(
+            login    = config.MT5_LOGIN,
+            password = config.MT5_PASSWORD,
+            server   = config.MT5_SERVER,
+            path     = config.MT5_PATH,
+        )
+        if not client.authenticate():
+            log.error("MT5 authentication failed — check .env and terminal")
+            return []
+
+        mt5_sym = config.PAIRS.get(symbol, {}).get("mt5_symbol", symbol)
+        mt5.symbol_select(mt5_sym, True)
+        bars = client.get_history(mt5_sym, resolution="HOUR", max_bars=max_bars)
+        client.shutdown()
+
+        if bars:
+            db.init_db(config.DB_PATH)
+            db.upsert_ohlc(config.DB_PATH, symbol, "HOUR", bars)
+            log.info("[%s] Fetched and cached %d bars from MT5", symbol, len(bars))
+        return bars
+    except Exception as exc:
+        log.error("MT5 fetch failed: %s", exc)
+        return []
+
+
 def _fetch_from_ig(symbol: str, epic: str, price_scale: int,
                    max_bars: int = 3000) -> list[dict]:
     """Fetch fresh OHLC history from IG and cache it."""
@@ -426,29 +537,43 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Forex backtest — baseline vs hybrid")
     parser.add_argument("--fetch",   action="store_true", help="Fetch fresh bars from IG first")
-    parser.add_argument("--yahoo",   action="store_true", help="Fetch ~2yr bars from Yahoo Finance (free, no API key)")  # [NEW — Step 17]
+    parser.add_argument("--mt5",     action="store_true", help="Fetch bars from MT5 terminal (up to 50k H1 bars, ~8 years)")
+    parser.add_argument("--yahoo",   action="store_true", help="Fetch ~2yr bars from Yahoo Finance (free, no API key)")
     parser.add_argument("--symbol",  default=None,        help="Single pair, e.g. EURUSD")
-    parser.add_argument("--bars",    type=int, default=None, help="Bars to use per pair (default: 10000 for Yahoo, 3000 for IG)")
+    parser.add_argument("--bars",    type=int, default=None, help="Bars to use per pair")
     parser.add_argument("--balance", type=float, default=config.INITIAL_BALANCE,
                         help="Starting balance for simulation")
     args = parser.parse_args()
 
-    # Set sensible default bar counts per source           [NEW — Step 17]
+    # Set sensible default bar counts per source
     if args.bars is None:
-        args.bars = 10000 if args.yahoo else 3000   # Yahoo: grab all ~2yr; IG: 3000 max
+        if args.mt5:
+            args.bars = 50000   # MT5: ~8 years of H1 data
+        elif args.yahoo:
+            args.bars = 10000   # Yahoo: ~2 years
+        else:
+            args.bars = 3000    # IG/DB: limited
 
     pairs = {args.symbol: config.PAIRS[args.symbol]} if args.symbol else config.PAIRS
     if args.symbol and args.symbol not in config.PAIRS:
         print(f"Unknown symbol '{args.symbol}'. Choices: {list(config.PAIRS)}")
         return
 
-    src            = "Yahoo Finance" if args.yahoo else ("IG API" if args.fetch else "DB cache")
-    session_filter = args.yahoo        # apply 12–16 UTC gate when using Yahoo 24h data
-    filters_note   = f"session 12–16 UTC + {SPREAD_COST_PIPS}pip spread" if session_filter else f"{SPREAD_COST_PIPS}pip spread only"
+    if args.mt5:
+        src = "MT5 terminal"
+    elif args.yahoo:
+        src = "Yahoo Finance"
+    elif args.fetch:
+        src = "IG API"
+    else:
+        src = "DB cache"
+    session_filter = args.yahoo or args.mt5   # apply 12–16 UTC gate when using 24h data
+    cost_note      = f"{SPREAD_COST_PIPS}pip spread + {SLIPPAGE_PIPS}pip slippage"
+    filters_note   = f"session 12–16 UTC + {cost_note}" if session_filter else cost_note
     print(f"\nFOREX BACKTEST  |  balance=${args.balance:,.0f}  |  {datetime.now():%Y-%m-%d %H:%M}")
     print(f"Strategies: Mean Reversion (baseline)  vs  Hybrid (regime-switching)")
     print(f"Data source: {src}  |  Filters: {filters_note}")
-    print(f"Note: trailing stop / MTF / COT not simulated — live win rate will be higher\n")
+    print(f"Note: MTF / COT filters not simulated — live win rate may differ\n")
 
     all_baseline = []
     all_hybrid   = []
@@ -456,7 +581,9 @@ def main() -> None:
     for symbol, pcfg in pairs.items():
         print(f"Loading {symbol}...", end=" ", flush=True)
 
-        if args.yahoo:                                                         # [NEW — Step 17]
+        if args.mt5:
+            bars = _fetch_from_mt5(symbol, max_bars=args.bars)
+        elif args.yahoo:
             bars = _fetch_from_yahoo(symbol, max_bars=args.bars)
         elif args.fetch:
             bars = _fetch_from_ig(symbol, pcfg["epic"], pcfg.get("price_scale", 1), args.bars)

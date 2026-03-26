@@ -77,15 +77,27 @@ check our DB, we might try to close an already-closed position, causing an API e
 - [ ] Add HTTP timeouts to COT fetcher and news scraper (M3, M4)
 
 ### Phase 2 — Backtester Improvements (Step 17)
-- [ ] Add 2-pip spread cost per round-trip
-- [ ] Multi-page OHLC fetch for 3000+ bars
+- [x] Add 2-pip spread cost per round-trip
+- [x] Multi-page OHLC fetch for 3000+ bars (MT5: 50k bars = 8 years)
 - [ ] Sharpe ratio calculation
 - [ ] Per-strategy breakdown (MR vs TF contribution)
 
+### Phase 2B — Profitability Optimization (2026-03-26)
+System went from losing (PF 0.79) to profitable (PF 1.12, +8.5%/pair) after Steps 1-2.
+- [x] Step 1: Fix backtest accuracy (trailing stop sim, next-bar entry, 0.5pip slippage)
+- [x] Step 2: Parameter optimization — RSI 25/75, stops 2.0-2.5×, EMA 20/50, ADX≥20, hold≤30
+- [x] Step 3: Walk-forward validation — 42% OOS windows profitable, avg +0.11% (has edge)
+- [x] Step 4: Per-pair analysis — USDCHF +35%, GBPUSD +10%, GBPJPY -3.6%, EURUSD -7.6%
+- [x] Step 5: Enhancements tried — MACD filter killed MR signals, breakeven stop neutral
+- [ ] Step 6a: Per-pair optimizer for EURUSD (-7.6%) — may need different params or exclusion
+- [ ] Step 6b: ADX direction filter for TF — only long when +DI > -DI (improve trend signals)
+- [ ] Step 6c: Run full grid optimizer from CLI — quick grid was 256 combos, full is 209k
+- [ ] Step 6d: Re-validate walk-forward after refinements
+
 ### Phase 3 — Walk-Forward Validation (Step 15)
-- [ ] Rolling window validation (6mo in-sample, 1mo out-of-sample)
+- [ ] Rolling window validation (6mo in-sample, 1mo out-of-sample) → merged into Phase 2B Step 3
 - [ ] Detect parameter overfitting before going live
-- [ ] Need 2-3 years of OHLC data (alternative data source or multi-day IG fetch)
+- [x] Need 2-3 years of OHLC data (MT5: 8 years fetched 2026-03-26)
 
 ### Phase 4 — Daily Performance Report (Step 14)
 - [ ] Auto-generate daily summary at 16:00 UTC session close

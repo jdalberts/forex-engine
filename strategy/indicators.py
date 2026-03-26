@@ -81,3 +81,34 @@ def bollinger_bands(
     upper  = middle + num_std * std
     lower  = middle - num_std * std
     return upper, middle, lower
+
+
+def macd(
+    close: pd.Series,
+    fast: int = 12,
+    slow: int = 26,
+    signal: int = 9,
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """
+    MACD — line, signal, histogram.
+
+    Parameters
+    ----------
+    close  : price series
+    fast   : fast EMA period
+    slow   : slow EMA period
+    signal : signal line EMA period
+
+    Returns
+    -------
+    (macd_line, signal_line, histogram) — each a pd.Series.
+    histogram = macd_line - signal_line.
+    Positive histogram = bullish momentum, negative = bearish.
+    Shrinking histogram = momentum fading (good for mean reversion entry).
+    """
+    ema_fast = close.ewm(span=fast, adjust=False).mean()
+    ema_slow = close.ewm(span=slow, adjust=False).mean()
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=signal, adjust=False).mean()
+    histogram = macd_line - signal_line
+    return macd_line, signal_line, histogram
