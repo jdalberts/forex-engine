@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from core import config, db
-from core.ig_client import IGClient
 from risk.guard import EquityGuard, PositionSizer
 
 log = logging.getLogger(__name__)
@@ -23,7 +22,7 @@ class ExecutionGateway:
 
     def __init__(
         self,
-        client:        IGClient,
+        client,
         db_path:       str,
         equity_guard:  EquityGuard,
         sizer:         PositionSizer,
