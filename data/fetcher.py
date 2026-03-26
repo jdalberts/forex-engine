@@ -6,13 +6,12 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 from core import config, db
-from core.ig_client import IGClient
 
 log = logging.getLogger(__name__)
 
 
 def seed_history(
-    client: IGClient,
+    client,
     db_path: str     = config.DB_PATH,
     symbol: str      = "EURUSD",
     epic: str        = "CS.D.EURUSD.CFD.IP",
@@ -46,7 +45,7 @@ def seed_history(
 
 
 def refresh_bars(
-    client: IGClient,
+    client,
     db_path: str,
     symbol: str,
     epic: str,
@@ -86,7 +85,7 @@ def refresh_bars(
 
 
 def fetch_live_quote(
-    client: IGClient,
+    client,
     db_path: str     = config.DB_PATH,
     symbol: str      = "EURUSD",
     epic: str        = "CS.D.EURUSD.CFD.IP",

@@ -21,7 +21,10 @@ from logging.handlers import RotatingFileHandler
 import pandas as pd                                                      # [NEW — Step 8] moved from inside loop
 
 from core import config, db
-from core.ig_client import IGClient
+if config.BROKER == "mt5":
+    from core.mt5_client import MT5Client
+else:
+    from core.ig_client import IGClient
 from data.cot_fetcher import refresh_cot, seed_cot                      # [NEW — Step 10]
 from data.fetcher import fetch_live_quote, refresh_bars, seed_history   # [NEW — Step 8]
 from data.news_filter import (is_news_window, refresh_news_cache,        # [NEW — Step 11]
@@ -99,6 +102,14 @@ _signal.signal(_signal.SIGTERM, _shutdown)
 
 def run(dry_run: bool = True) -> None:
     pairs = config.PAIRS
+
+    # When using MT5, swap epic → mt5_symbol and force price_scale=1
+    # so the rest of the engine works unchanged.
+    if config.BROKER == "mt5":
+        for _k, _v in pairs.items():
+            _v["epic"] = _v.get("mt5_symbol", _k)
+            _v["price_scale"] = 1
+
     symbols = list(pairs.keys())
 
     log.info("=" * 60)
@@ -115,20 +126,28 @@ def run(dry_run: bool = True) -> None:
     seed_cot(config.DB_PATH)                                               # [NEW — Step 10]
     refresh_central_bank_calendar()                                        # [NEW — Step 11] seed news_events.json
 
-    # ── IG client ─────────────────────────────────────────────────────────────
-    client = IGClient(
-        api_key    = config.IG_API_KEY,
-        identifier = config.IG_IDENTIFIER,
-        password   = config.IG_PASSWORD,
-        account_id = config.IG_ACCOUNT_ID,
-        demo       = config.IG_DEMO,
-    )
+    # ── Broker client ──────────────────────────────────────────────────────────
+    if config.BROKER == "mt5":
+        client = MT5Client(
+            login    = config.MT5_LOGIN,
+            password = config.MT5_PASSWORD,
+            server   = config.MT5_SERVER,
+            path     = config.MT5_PATH,
+        )
+    else:
+        client = IGClient(
+            api_key    = config.IG_API_KEY,
+            identifier = config.IG_IDENTIFIER,
+            password   = config.IG_PASSWORD,
+            account_id = config.IG_ACCOUNT_ID,
+            demo       = config.IG_DEMO,
+        )
     if not client.authenticate():
-        log.error("IG authentication failed — check .env credentials")
-        _alert("IG authentication failed on startup — engine did not start")   # [NEW — Step 9]
-        send_alert(                                                             # [NEW — Step 13]
+        log.error("Broker authentication failed — check .env credentials")
+        _alert("Broker authentication failed on startup — engine did not start")
+        send_alert(
             "🚨 ENGINE ALERT\n"
-            "IG authentication failed — engine did not start\n"
+            "Broker authentication failed — engine did not start\n"
             "Check .env credentials"
         )
         return
@@ -465,6 +484,8 @@ def run(dry_run: bool = True) -> None:
         time.sleep(config.QUOTE_INTERVAL_SEC)
 
     log.info("Engine stopped.")
+    if config.BROKER == "mt5":
+        client.shutdown()
     send_alert("🛑 Engine stopped (normal shutdown)")                      # [NEW — Step 13]
 
 

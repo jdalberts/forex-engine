@@ -9,12 +9,25 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# ── IG credentials ────────────────────────────────────────────────────────────
-IG_API_KEY: str     = os.environ["IG_API_KEY"]
-IG_IDENTIFIER: str  = os.environ["IG_IDENTIFIER"]
-IG_PASSWORD: str    = os.environ["IG_PASSWORD"]
+# ── Broker selection ──────────────────────────────────────────────────────────
+# Set BROKER=mt5 in .env to use MetaTrader 5 (via Pepperstone/IC Markets).
+# Set BROKER=ig  (or omit) to keep using IG Markets.
+BROKER: str = os.environ.get("BROKER", "ig").lower()
+
+# ── IG credentials (only required when BROKER=ig) ────────────────────────────
+IG_API_KEY: str     = os.environ.get("IG_API_KEY", "")
+IG_IDENTIFIER: str  = os.environ.get("IG_IDENTIFIER", "")
+IG_PASSWORD: str    = os.environ.get("IG_PASSWORD", "")
 IG_ACCOUNT_ID: str  = os.environ.get("IG_ACCOUNT_ID", "Z69JGB")
 IG_DEMO: bool       = os.environ.get("IG_DEMO", "true").lower() == "true"
+
+# ── MT5 credentials (only required when BROKER=mt5) ──────────────────────────
+# No API key needed — MT5 uses your broker account login + password.
+# Get these from your Pepperstone/IC Markets account after installing MT5.
+MT5_LOGIN: int      = int(os.environ.get("MT5_LOGIN", "0"))
+MT5_PASSWORD: str   = os.environ.get("MT5_PASSWORD", "")
+MT5_SERVER: str     = os.environ.get("MT5_SERVER", "")       # e.g. "Pepperstone-Demo" or "ICMarketsSC-Demo"
+MT5_PATH: str       = os.environ.get("MT5_PATH", "")         # path to terminal64.exe (optional)
 
 # ── Instruments ───────────────────────────────────────────────────────────────
 # All share the London/NY overlap window (14:00–18:00 SAST)
@@ -24,13 +37,13 @@ IG_DEMO: bool       = os.environ.get("IG_DEMO", "true").lower() == "true"
 #   USD/CHF: 100,000 × 0.0001 = CHF10 → ~$12.50 at 0.80 USDCHF
 #   GBP/JPY: 100,000 × 0.01   = JPY1000 → ~$6.30 at 158 USDJPY
 PAIRS: dict = {
-    # price_scale: divide raw IG snapshot/OHLC price by this to get actual FX rate.
-    # EUR/USD CFD is quoted as ×10000 by IG (/markets and /prices return 11510 → 1.1510).
-    # The other pairs are returned in human-readable format by IG, so price_scale=1.
-    "EURUSD": {"epic": "CS.D.EURUSD.CFD.IP", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0,  "price_scale": 10000},
-    "GBPUSD": {"epic": "CS.D.GBPUSD.CFD.IP", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0,  "price_scale": 1},
-    "USDCHF": {"epic": "CS.D.USDCHF.CFD.IP", "currency": "CHF", "pip_size": 0.0001, "pip_value_usd": 12.5,  "price_scale": 1},
-    "GBPJPY": {"epic": "CS.D.GBPJPY.CFD.IP", "currency": "JPY", "pip_size": 0.01,   "pip_value_usd":  6.3,  "price_scale": 1},
+    # epic:        IG instrument ID (used when BROKER=ig)
+    # mt5_symbol:  MT5 symbol name  (used when BROKER=mt5)
+    # price_scale: divide raw IG price by this (MT5 always returns readable prices, uses 1)
+    "EURUSD": {"epic": "CS.D.EURUSD.CFD.IP", "mt5_symbol": "EURUSD", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0,  "price_scale": 10000},
+    "GBPUSD": {"epic": "CS.D.GBPUSD.CFD.IP", "mt5_symbol": "GBPUSD", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0,  "price_scale": 1},
+    "USDCHF": {"epic": "CS.D.USDCHF.CFD.IP", "mt5_symbol": "USDCHF", "currency": "CHF", "pip_size": 0.0001, "pip_value_usd": 12.5,  "price_scale": 1},
+    "GBPJPY": {"epic": "CS.D.GBPJPY.CFD.IP", "mt5_symbol": "GBPJPY", "currency": "JPY", "pip_size": 0.01,   "pip_value_usd":  6.3,  "price_scale": 1},
 }
 
 # ── Session window (UTC) ──────────────────────────────────────────────────────
