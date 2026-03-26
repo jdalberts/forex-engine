@@ -62,8 +62,9 @@ from strategy.trend_following import (
 from strategy.regime_detection import (
     ADX_PERIOD, ADX_TREND_THRESHOLD,
     ATR_SPIKE_WINDOW, ATR_SPIKE_MULT,
-    _adx, _adx_full, _atr as _rd_atr,
+    _adx, _atr as _rd_atr,
 )
+from strategy.indicators import adx_full as _adx_full
 from strategy.indicators import macd as _macd
 
 

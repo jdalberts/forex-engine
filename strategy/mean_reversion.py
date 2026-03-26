@@ -21,7 +21,6 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 
 from core import config
@@ -31,7 +30,6 @@ log = logging.getLogger(__name__)
 
 # ── Parameters (sourced from config — edit values in core/config.py) ──────────
 RSI_PERIOD      = config.MR_RSI_PERIOD
-VWAP_WINDOW     = config.MR_VWAP_WINDOW
 BB_PERIOD       = config.MR_BB_PERIOD       # [NEW — Step 18]
 BB_STD_DEV      = config.MR_BB_STD_DEV      # [NEW — Step 18]
 ATR_PERIOD      = config.MR_ATR_PERIOD
@@ -57,17 +55,6 @@ def _bb(df: pd.DataFrame, period: int = BB_PERIOD,
         num_std: float = BB_STD_DEV) -> tuple:
     """Bollinger Bands wrapper — delegates to strategy.indicators. [NEW — Step 18]"""
     return _bb_shared(df["close"], period, num_std)
-
-
-def _vwap(df: pd.DataFrame, window: int = VWAP_WINDOW) -> pd.Series:
-    tp  = (df["high"] + df["low"] + df["close"]) / 3
-    vol = df.get("volume", pd.Series(1.0, index=df.index))
-    # FX data (Yahoo Finance, IG CFD) has zero volume — use uniform weighting
-    # so VWAP degrades gracefully to a rolling average price.
-    vol = vol.where(vol > 0, 1.0)
-    cum_tpv = (tp * vol).rolling(window).sum()
-    cum_v   = vol.rolling(window).sum().replace(0, np.nan)
-    return (cum_tpv / cum_v).bfill()
 
 
 # ── Signal generation ─────────────────────────────────────────────────────────

@@ -83,6 +83,53 @@ def bollinger_bands(
     return upper, middle, lower
 
 
+def adx_full(
+    df: pd.DataFrame,
+    period: int = 14,
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """
+    ADX with directional indicators (Wilder smoothing).
+
+    Parameters
+    ----------
+    df     : DataFrame with columns high, low, close
+    period : smoothing period (Wilder: alpha = 1/period)
+
+    Returns
+    -------
+    (plus_di, minus_di, adx) — all pd.Series.
+    plus_di > minus_di → bullish trend, minus_di > plus_di → bearish trend.
+    """
+    high  = df["high"]
+    low   = df["low"]
+    close = df["close"]
+
+    up_move   = high.diff()
+    down_move = -low.diff()
+
+    plus_dm  = np.where((up_move > down_move) & (up_move > 0),   up_move,   0.0)
+    minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
+
+    plus_dm_s  = pd.Series(plus_dm,  index=df.index)
+    minus_dm_s = pd.Series(minus_dm, index=df.index)
+
+    hl = high - low
+    hc = (high - close.shift()).abs()
+    lc = (low  - close.shift()).abs()
+    tr = pd.concat([hl, hc, lc], axis=1).max(axis=1)
+
+    alpha = 1.0 / period
+    tr_s     = tr.ewm(alpha=alpha, adjust=False).mean()
+    plus_di  = 100 * plus_dm_s.ewm(alpha=alpha, adjust=False).mean() / tr_s.replace(0, np.nan)
+    minus_di = 100 * minus_dm_s.ewm(alpha=alpha, adjust=False).mean() / tr_s.replace(0, np.nan)
+
+    di_sum = (plus_di + minus_di).replace(0, np.nan)
+    dx     = 100 * (plus_di - minus_di).abs() / di_sum
+    adx_val = dx.ewm(alpha=alpha, adjust=False).mean()
+
+    return plus_di, minus_di, adx_val
+
+
 def macd(
     close: pd.Series,
     fast: int = 12,

@@ -30,8 +30,7 @@ from typing import Optional
 import pandas as pd
 
 from core import config
-from strategy.indicators import atr as _atr_shared  # [NEW — Step 9]
-from strategy.regime_detection import _adx_full
+from strategy.indicators import atr as _atr_shared, adx_full  # [NEW — Step 9]
 
 log = logging.getLogger(__name__)
 
@@ -87,7 +86,7 @@ def trend_following_signal(bars: list[dict]) -> Optional[dict]:
     df["atr"]      = _atr(df)
 
     # ADX direction indicators for trend confirmation
-    plus_di, minus_di, _ = _adx_full(df)
+    plus_di, minus_di, _ = adx_full(df)
 
     # Current and previous bar values
     curr = df.iloc[-1]

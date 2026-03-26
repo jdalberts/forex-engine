@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 from core import config
-from strategy.indicators import atr as _atr_shared  # [NEW — Step 9]
+from strategy.indicators import atr as _atr_shared, adx_full as _adx_full_shared  # [NEW — Step 9]
 
 log = logging.getLogger(__name__)
 
@@ -47,55 +47,14 @@ def _atr(df: pd.DataFrame, period: int = ATR_PERIOD) -> pd.Series:
 
 
 def _adx(df: pd.DataFrame, period: int = ADX_PERIOD) -> pd.Series:
-    """
-    Average Directional Index (Wilder smoothing).
-
-    Returns a Series of ADX values aligned to df's index.
-    Values below period*2 rows will be NaN — need enough bars to warm up.
-    """
-    _, _, adx = _adx_full(df, period)
+    """Average Directional Index — delegates to shared indicators."""
+    _, _, adx = _adx_full_shared(df, period)
     return adx
 
 
 def _adx_full(df: pd.DataFrame, period: int = ADX_PERIOD) -> tuple:
-    """
-    ADX with directional indicators.
-
-    Returns (plus_di, minus_di, adx) — all pd.Series.
-    plus_di > minus_di → bullish trend, minus_di > plus_di → bearish trend.
-    """
-    high  = df["high"]
-    low   = df["low"]
-    close = df["close"]
-
-    # Directional movement
-    up_move   = high.diff()
-    down_move = -low.diff()
-
-    plus_dm  = np.where((up_move > down_move) & (up_move > 0),   up_move,   0.0)
-    minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
-
-    plus_dm_s  = pd.Series(plus_dm,  index=df.index)
-    minus_dm_s = pd.Series(minus_dm, index=df.index)
-
-    # True Range
-    hl = high - low
-    hc = (high - close.shift()).abs()
-    lc = (low  - close.shift()).abs()
-    tr = pd.concat([hl, hc, lc], axis=1).max(axis=1)
-
-    # Wilder smoothing: equivalent to EWM with alpha = 1/period
-    alpha = 1.0 / period
-    tr_s     = tr.ewm(alpha=alpha, adjust=False).mean()
-    plus_di  = 100 * plus_dm_s.ewm(alpha=alpha, adjust=False).mean() / tr_s.replace(0, np.nan)
-    minus_di = 100 * minus_dm_s.ewm(alpha=alpha, adjust=False).mean() / tr_s.replace(0, np.nan)
-
-    # DX and ADX
-    di_sum  = (plus_di + minus_di).replace(0, np.nan)
-    dx      = 100 * (plus_di - minus_di).abs() / di_sum
-    adx     = dx.ewm(alpha=alpha, adjust=False).mean()
-
-    return plus_di, minus_di, adx
+    """ADX with +DI/-DI — delegates to shared indicators."""
+    return _adx_full_shared(df, period)
 
 
 # ── [NEW] Regime detection ────────────────────────────────────────────────────

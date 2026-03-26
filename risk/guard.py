@@ -156,11 +156,12 @@ class EquityGuard:
 
 class DailyLossGuard:
     """
-    Pause trading for the rest of the calendar day if net P&L on closed trades
+    Pause trading until next session if net P&L on closed trades
     falls below -DAILY_LOSS_LIMIT × balance.
 
-    Separate from EquityGuard (total drawdown from start) — this resets each
-    UTC calendar day automatically because it queries today's DB records.
+    Resets at session close (16:00 UTC) — not midnight UTC — so consecutive
+    session losses accumulate correctly. Queries DB for trades closed since
+    last session close boundary.
 
     Works for ALL strategies — checks happen before any signal is acted on.
     """
@@ -184,8 +185,8 @@ class DailyLossGuard:
         pnl = db.daily_pnl(self.db_path)
         if pnl < 0 and abs(pnl) >= self.limit * self.balance:
             log.warning(
-                "DAILY LOSS LIMIT reached — today's P&L: %.2f  (limit: %.2f %% of %.2f) "
-                "— no new trades until tomorrow UTC",
+                "DAILY LOSS LIMIT reached — session P&L: %.2f  (limit: %.2f %% of %.2f) "
+                "— no new trades until next session",
                 pnl, self.limit * 100, self.balance,
             )
             return False

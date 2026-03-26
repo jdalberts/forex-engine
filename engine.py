@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import pathlib
 import signal as _signal
+import sqlite3
 import time
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
@@ -155,8 +156,8 @@ def run(dry_run: bool = True) -> None:
     # ── Sync: close DB trades that IG already closed ──────────────────────────
     try:                                                                     # [BUG 4 FIX]
         ig_open = {p["market"]["epic"] for p in client.get_open_positions()}
-    except Exception:
-        log.warning("Startup sync: failed to fetch IG positions — skipping")
+    except (KeyError, TypeError, ConnectionError, OSError) as exc:
+        log.warning("Startup sync: failed to fetch broker positions — %s", exc)
         ig_open = None
     if ig_open is not None:
         for symbol, pcfg in pairs.items():
@@ -175,9 +176,9 @@ def run(dry_run: bool = True) -> None:
                 try:                                                         # [BUG 4 FIX]
                     db.close_trade(config.DB_PATH, db_trade["id"],
                                    exit_price=mid if quote else entry, pnl=pnl)
-                    log.info("[%s] Position closed on IG — synced DB  estimated_pnl=%.2f", symbol, pnl)
-                except Exception:
-                    log.warning("[%s] Startup sync: DB close failed (may already be closed)", symbol)
+                    log.info("[%s] Position closed by broker — synced DB  estimated_pnl=%.2f", symbol, pnl)
+                except (KeyError, TypeError, sqlite3.Error) as exc:
+                    log.warning("[%s] Startup sync: DB close failed — %s", symbol, exc)
 
     # ── Seed history for all pairs ────────────────────────────────────────────
     for symbol, pcfg in pairs.items():
@@ -191,10 +192,10 @@ def run(dry_run: bool = True) -> None:
     # ── Fetch real account balance from IG ────────────────────────────────────
     real_balance = client.get_account_balance()
     if real_balance is not None:
-        log.info("IG account balance: $%.2f", real_balance)
+        log.info("Account balance: $%.2f", real_balance)
     else:
         real_balance = config.INITIAL_BALANCE
-        log.warning("Could not fetch IG balance — using config.INITIAL_BALANCE ($%.2f)", real_balance)
+        log.warning("Could not fetch balance — using config.INITIAL_BALANCE ($%.2f)", real_balance)
 
     # ── Risk ──────────────────────────────────────────────────────────────────
     session      = SessionGate()
@@ -279,8 +280,8 @@ def run(dry_run: bool = True) -> None:
         if _now_mono - _last_position_sync >= config.POSITION_SYNC_INTERVAL_SEC:
             try:                                                             # [BUG 4 FIX]
                 _ig_open = {p["market"]["epic"] for p in client.get_open_positions()}
-            except Exception:
-                log.warning("Position sync: failed to fetch IG positions — skipping this cycle")
+            except (KeyError, TypeError, ConnectionError, OSError) as exc:
+                log.warning("Position sync: failed to fetch broker positions — %s", exc)
                 _ig_open = None
             if _ig_open is not None:
                 for _sym, _pcfg in pairs.items():
@@ -300,11 +301,11 @@ def run(dry_run: bool = True) -> None:
                         try:                                                 # [BUG 4 FIX]
                             db.close_trade(config.DB_PATH, _db_trade["id"],
                                            exit_price=_mid, pnl=_pnl)
-                        except Exception:
-                            log.warning("[%s] Position sync: DB close failed (may already be closed)",
-                                        _sym)
+                        except (KeyError, TypeError, sqlite3.Error) as exc:
+                            log.warning("[%s] Position sync: DB close failed — %s",
+                                        _sym, exc)
                             continue
-                        log.info("[%s] Mid-session sync: IG closed position — DB updated  pnl=%.2f",
+                        log.info("[%s] Mid-session sync: Broker closed position — DB updated  pnl=%.2f",
                                  _sym, _pnl)
                         send_alert(                                         # [NEW — Step 13]
                             f"🔴 TRADE CLOSED\n"
@@ -495,7 +496,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--live",
         action="store_true",
-        help="Submit real orders to IG (default: dry run)",
+        help="Submit real orders (default: dry run)",
     )
     args = parser.parse_args()
     try:                                                                    # [NEW — Step 13]

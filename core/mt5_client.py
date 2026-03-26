@@ -72,18 +72,17 @@ class MT5Client:
         """Initialise MT5 terminal connection and log in."""
         import MetaTrader5 as mt5
 
-        init_kwargs: dict = {}
+        init_kwargs: dict = {
+            "login":    self.login,
+            "password": self.password,
+            "server":   self.server,
+            "timeout":  60000,
+        }
         if self.path:
             init_kwargs["path"] = self.path
 
         if not mt5.initialize(**init_kwargs):
             log.error("MT5 initialize() failed: %s", mt5.last_error())
-            return False
-
-        authorized = mt5.login(self.login, password=self.password, server=self.server)
-        if not authorized:
-            log.error("MT5 login failed: %s", mt5.last_error())
-            mt5.shutdown()
             return False
 
         info = mt5.account_info()
@@ -109,6 +108,7 @@ class MT5Client:
         """
         import MetaTrader5 as mt5
 
+        mt5.symbol_select(symbol, True)  # ensure symbol is in Market Watch
         tick = mt5.symbol_info_tick(symbol)
         if tick is None:
             log.warning("MT5 tick failed for %s: %s", symbol, mt5.last_error())
@@ -150,9 +150,11 @@ class MT5Client:
             return []
 
         if from_time is not None:
-            # Fetch bars from a specific time to now
-            utc_from = from_time.replace(tzinfo=timezone.utc) if from_time.tzinfo is None else from_time
-            rates = mt5.copy_rates_range(symbol, tf, utc_from, datetime.now(timezone.utc))
+            # MT5 copy_rates_range expects naive UTC datetimes.
+            # We add a generous buffer (1 day ahead) to ensure we get all recent bars.
+            utc_from = from_time.replace(tzinfo=None) if from_time.tzinfo is not None else from_time
+            utc_to = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=1)
+            rates = mt5.copy_rates_range(symbol, tf, utc_from, utc_to)
         else:
             rates = mt5.copy_rates_from_pos(symbol, tf, 0, max_bars)
 
@@ -163,7 +165,7 @@ class MT5Client:
         bars = []
         for r in rates:
             bars.append({
-                "time":   datetime.utcfromtimestamp(r["time"]),
+                "time":   datetime.fromtimestamp(r["time"], tz=timezone.utc).replace(tzinfo=None),
                 "open":   float(r["open"]),
                 "high":   float(r["high"]),
                 "low":    float(r["low"]),

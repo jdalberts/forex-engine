@@ -90,15 +90,51 @@ System went from losing (PF 0.79) to profitable (PF 1.12, +8.5%/pair) after Step
 - [x] Step 4: Per-pair analysis — USDCHF +35%, GBPUSD +10%, GBPJPY -3.6%, EURUSD -7.6%
 - [x] Step 5: Enhancements tried — MACD filter killed MR signals, breakeven stop neutral
 - [x] Step 6a: Pair selection — EURUSD dropped (unprofitable across all 256 param combos). Keeping USDCHF (+40.6%), GBPUSD (+6.2%), GBPJPY (-2.3% diversification)
-- [ ] Step 6b: ADX direction filter for TF — only long when +DI > -DI (improve trend signals)
+- [x] Step 6b: ADX direction filter for TF — only long when +DI > -DI (PF 1.13 → 1.19)
 - [x] Step 6c: Session windows tested — 12-16 UTC confirmed optimal, wider windows hurt returns
-- [ ] Step 6d: Run full grid optimizer from CLI — quick grid was 256 combos, full is 209k
-- [ ] Step 6e: Re-validate walk-forward after refinements
+- [ ] Step 6d: Medium grid optimizer running (~15000s remaining as of 2026-03-26 ~18:30 SAST) — paste results next session
+- [x] Step 6e: Walk-forward re-validated — 42.9% OOS profitable, avg +0.15%/month (positive edge)
+- [ ] Step 7: Auto-launch engine — set up Windows scheduled task or startup script to run `python engine.py` before 14:00 SAST daily
 
 ### Phase 3 — Walk-Forward Validation (Step 15)
 - [ ] Rolling window validation (6mo in-sample, 1mo out-of-sample) → merged into Phase 2B Step 3
 - [ ] Detect parameter overfitting before going live
 - [x] Need 2-3 years of OHLC data (MT5: 8 years fetched 2026-03-26)
+
+### Phase 3B — Code Review Fixes (2026-03-26 review)
+
+#### Bugs — Fix Before Live
+- [ ] BUG 3: DailyLossGuard resets UTC midnight → fix to 16:00 UTC session close (`risk/guard.py`)
+- [ ] Replace bare `except Exception` with specific catches in engine.py (4+ locations)
+- [ ] IG client: verify re-auth succeeded before retrying on 401 (`core/ig_client.py`)
+- [ ] MT5 client: fix timezone — uses `datetime.now()` which assumes local=UTC+2 (`core/mt5_client.py`)
+- [ ] Add max-position-per-pair limit = 1 (M2 from original review, still open) (`engine.py`)
+- [ ] News filter: fix DST transition calculation (`data/news_filter.py`)
+- [ ] Add MetaTrader5 to requirements.txt
+- [ ] Remove hardcoded IG account ID default from config.py
+
+#### Code Cleanup
+- [ ] Remove dead `_vwap()` function from `strategy/mean_reversion.py`
+- [ ] Move `_adx_full()` from `regime_detection.py` to `strategy/indicators.py`
+- [ ] Remove unused MACD function from `strategy/indicators.py` (or integrate)
+- [ ] Remove orphaned test files: test_regime.py, test_switcher.py, test_trend.py
+- [ ] Create `.env.example` template
+
+#### Dashboard/UI Improvements
+- [ ] Add engine pause/resume button (emergency kill switch in UI)
+- [ ] Fix live PnL direction check — normalize "long"/"BUY" variants (`dashboard/app.py`)
+- [ ] Add error handling in `/api/state` — wrap regime/COT in try/except
+- [ ] Color-code drawdown display: green <2%, yellow 2-4%, orange 4-8%, red >8%
+- [ ] Add filter summary per pair ("USDCHF: Blocked — High Vol + News")
+- [ ] Add soft/hard drawdown limit lines to equity curve chart
+- [ ] Add trade entry/exit markers on equity curve
+- [ ] Add Sharpe ratio to backtest stats display
+- [ ] WebSocket for real-time updates (replace 5s polling)
+
+#### Deployment
+- [ ] Step 7: Auto-launch engine — Windows Task Scheduler before 14:00 SAST daily
+- [ ] Telegram daily performance report at 16:00 UTC session close
+- [ ] Docker/systemd config for cloud deployment (future)
 
 ### Phase 4 — Daily Performance Report (Step 14)
 - [ ] Auto-generate daily summary at 16:00 UTC session close
