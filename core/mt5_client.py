@@ -206,17 +206,20 @@ class MT5Client:
 
         price = tick.ask if order_type == mt5.ORDER_TYPE_BUY else tick.bid
 
-        # Determine filling mode supported by this symbol
+        # Determine filling mode supported by this symbol.
+        # SYMBOL_FILLING_FOK=1, SYMBOL_FILLING_IOC=2 are bitmask values in filling_mode.
+        # ORDER_FILLING_FOK=0, ORDER_FILLING_IOC=1, ORDER_FILLING_RETURN=2 are order enum values.
         info = mt5.symbol_info(epic)
         if info is not None:
-            if info.filling_mode & mt5.ORDER_FILLING_IOC:
-                filling = mt5.ORDER_FILLING_IOC
-            elif info.filling_mode & mt5.ORDER_FILLING_FOK:
+            if info.filling_mode & 1:   # SYMBOL_FILLING_FOK
                 filling = mt5.ORDER_FILLING_FOK
+            elif info.filling_mode & 2: # SYMBOL_FILLING_IOC
+                filling = mt5.ORDER_FILLING_IOC
             else:
                 filling = mt5.ORDER_FILLING_RETURN
+            log.debug("Symbol %s filling_mode=%d → using %d", epic, info.filling_mode, filling)
         else:
-            filling = mt5.ORDER_FILLING_IOC  # Pepperstone default
+            filling = mt5.ORDER_FILLING_FOK
 
         request = {
             "action":      mt5.TRADE_ACTION_DEAL,
@@ -372,14 +375,14 @@ class MT5Client:
 
         price = tick.bid if order_type == mt5.ORDER_TYPE_SELL else tick.ask
 
-        # Determine filling mode
+        # Determine filling mode (same logic as place_order)
         info = mt5.symbol_info(pos.symbol)
-        filling = mt5.ORDER_FILLING_IOC
+        filling = mt5.ORDER_FILLING_FOK
         if info is not None:
-            if info.filling_mode & mt5.ORDER_FILLING_IOC:
-                filling = mt5.ORDER_FILLING_IOC
-            elif info.filling_mode & mt5.ORDER_FILLING_FOK:
+            if info.filling_mode & 1:
                 filling = mt5.ORDER_FILLING_FOK
+            elif info.filling_mode & 2:
+                filling = mt5.ORDER_FILLING_IOC
 
         request = {
             "action":      mt5.TRADE_ACTION_DEAL,
