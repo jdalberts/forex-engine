@@ -206,18 +206,31 @@ class MT5Client:
 
         price = tick.ask if order_type == mt5.ORDER_TYPE_BUY else tick.bid
 
+        # Determine filling mode supported by this symbol
+        info = mt5.symbol_info(epic)
+        if info is not None:
+            if info.filling_mode & mt5.ORDER_FILLING_IOC:
+                filling = mt5.ORDER_FILLING_IOC
+            elif info.filling_mode & mt5.ORDER_FILLING_FOK:
+                filling = mt5.ORDER_FILLING_FOK
+            else:
+                filling = mt5.ORDER_FILLING_RETURN
+        else:
+            filling = mt5.ORDER_FILLING_IOC  # Pepperstone default
+
         request = {
-            "action":    mt5.TRADE_ACTION_DEAL,
-            "symbol":    epic,
-            "volume":    size,
-            "type":      order_type,
-            "price":     price,
-            "sl":        stop_level,
-            "tp":        limit_level,
-            "deviation": 20,  # max slippage in points
-            "magic":     234000,  # EA magic number to identify our trades
-            "comment":   "forex-engine",
-            "type_time": mt5.ORDER_TIME_GTC,
+            "action":      mt5.TRADE_ACTION_DEAL,
+            "symbol":      epic,
+            "volume":      size,
+            "type":        order_type,
+            "price":       price,
+            "sl":          stop_level,
+            "tp":          limit_level,
+            "deviation":   20,  # max slippage in points
+            "magic":       234000,  # EA magic number to identify our trades
+            "comment":     "forex-engine",
+            "type_time":   mt5.ORDER_TIME_GTC,
+            "type_filling": filling,
         }
 
         result = mt5.order_send(request)
@@ -359,16 +372,26 @@ class MT5Client:
 
         price = tick.bid if order_type == mt5.ORDER_TYPE_SELL else tick.ask
 
+        # Determine filling mode
+        info = mt5.symbol_info(pos.symbol)
+        filling = mt5.ORDER_FILLING_IOC
+        if info is not None:
+            if info.filling_mode & mt5.ORDER_FILLING_IOC:
+                filling = mt5.ORDER_FILLING_IOC
+            elif info.filling_mode & mt5.ORDER_FILLING_FOK:
+                filling = mt5.ORDER_FILLING_FOK
+
         request = {
-            "action":    mt5.TRADE_ACTION_DEAL,
-            "symbol":    pos.symbol,
-            "volume":    size,
-            "type":      order_type,
-            "position":  ticket,
-            "price":     price,
-            "deviation": 20,
-            "magic":     234000,
-            "comment":   "forex-engine close",
+            "action":      mt5.TRADE_ACTION_DEAL,
+            "symbol":      pos.symbol,
+            "volume":      size,
+            "type":        order_type,
+            "position":    ticket,
+            "price":       price,
+            "deviation":   20,
+            "magic":       234000,
+            "comment":     "forex-engine close",
+            "type_filling": filling,
             "type_time": mt5.ORDER_TIME_GTC,
         }
 
