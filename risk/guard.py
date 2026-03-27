@@ -75,23 +75,28 @@ class PositionSizer:
             return 0.0
         stop_pips  = stop_distance / pip_size
         contracts  = risk_amount / (stop_pips * pip_value_usd)
-        # IG minimum deal size is 1 contract; always round up to avoid
-        # MINIMUM_ORDER_SIZE_ERROR (fractional sizes below 1 are rejected)
-        contracts_ceiled = max(math.ceil(contracts), 1)
 
-        # [NEW — Step 9] Hard cap: if the forced minimum exceeds MAX_RISK_OVERRIDE_MULT ×
-        # intended risk, skip the trade rather than silently over-risk the account.
-        actual_risk   = contracts_ceiled * stop_pips * pip_value_usd
+        # MT5 supports micro lots (0.01); IG requires minimum 1 contract.
+        # Use broker-appropriate minimum and rounding.
+        if config.BROKER == "mt5":
+            # Round down to nearest 0.01 lot, minimum 0.01
+            contracts_sized = max(math.floor(contracts * 100) / 100, 0.01)
+        else:
+            # IG: round up to nearest whole contract, minimum 1
+            contracts_sized = max(math.ceil(contracts), 1)
+
+        # Hard cap: skip trade if minimum size risks too much
+        actual_risk   = contracts_sized * stop_pips * pip_value_usd
         intended_risk = risk_amount
         if actual_risk > intended_risk * config.MAX_RISK_OVERRIDE_MULT:
             log.warning(
-                "PositionSizer: min 1 contract risks $%.2f (%.1f%% of account) "
+                "PositionSizer: min size %.2f risks $%.2f (%.1f%% of account) "
                 "— exceeds %.1fx intended ($%.2f) — returning 0 to skip trade",
-                actual_risk, actual_risk / balance * 100,
+                contracts_sized, actual_risk, actual_risk / balance * 100,
                 config.MAX_RISK_OVERRIDE_MULT, intended_risk,
             )
             return 0.0
-        return contracts_ceiled
+        return contracts_sized
 
 
 class EquityGuard:
