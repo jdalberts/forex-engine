@@ -92,8 +92,9 @@ System went from losing (PF 0.79) to profitable (PF 1.12, +8.5%/pair) after Step
 - [x] Step 6a: Pair selection — EURUSD dropped (unprofitable across all 256 param combos). Keeping USDCHF (+40.6%), GBPUSD (+6.2%), GBPJPY (-2.3% diversification)
 - [x] Step 6b: ADX direction filter for TF — only long when +DI > -DI (PF 1.13 → 1.19)
 - [x] Step 6c: Session windows tested — 12-16 UTC confirmed optimal, wider windows hurt returns
-- [ ] Step 6d: Medium grid optimizer running (~15000s remaining as of 2026-03-26 ~18:30 SAST) — paste results next session
+- [x] Step 6d: Medium grid optimizer (2592 combos) — PF 1.42, +55%/pair, all 3 pairs profitable. Params applied.
 - [x] Step 6e: Walk-forward re-validated — 42.9% OOS profitable, avg +0.15%/month (positive edge)
+- [ ] Step 6f: FULL grid optimizer (~209k combos, ~18 hours overnight) — run `python optimize.py --bars 50000 --top 20` in external terminal, leave overnight. Could find even better params beyond medium grid.
 - [ ] Step 7: Auto-launch engine — set up Windows scheduled task or startup script to run `python engine.py` before 14:00 SAST daily
 
 ### Phase 3 — Walk-Forward Validation (Step 15)
@@ -128,6 +129,7 @@ System went from losing (PF 0.79) to profitable (PF 1.12, +8.5%/pair) after Step
 - [x] "Session PnL" label (was "Today's PnL")
 
 #### Dashboard/UI — Remaining
+- [ ] **FIX: Starting balance hardcoded $20,000** — dashboard HTML and JS use `START = 20000`. Should read from broker API or config. Drawdown shows 95% because it compares $999 vs $20,000 instead of actual starting balance.
 - [ ] Add filter summary per pair ("USDCHF: Blocked — High Vol + News")
 - [ ] Add soft/hard drawdown limit lines to equity curve chart
 - [ ] Add trade entry/exit markers on equity curve
@@ -137,7 +139,20 @@ System went from losing (PF 0.79) to profitable (PF 1.12, +8.5%/pair) after Step
 #### Deployment
 - [ ] Step 7: Auto-launch engine — Windows Task Scheduler before 14:00 SAST daily
 - [ ] Telegram daily performance report at 16:00 UTC session close
-- [ ] Docker/systemd config for cloud deployment (future)
+- [ ] Weekly auto-research agent (`research_agent.py`) — runs every Sunday evening via Task Scheduler:
+  - Calls Claude API with web search to scan 4 topics: strategy research, tool/API updates, news source monitoring, SA regulation
+  - Compares findings against current memory, flags what's new
+  - Updates `memory/research_unified_engine.md` with new findings
+  - Sends Telegram digest with key changes
+  - Estimated Claude API cost: ~$0.10-0.30/week
+- [ ] Contabo Windows VPS deployment (~$15/month):
+  - Sign up for Contabo Windows VPS (4GB RAM, 2 vCPU minimum)
+  - Install: Python 3.11+, MT5 terminal, Git, pip install requirements
+  - Clone repo, copy .env, configure MT5 login, enable AutoTrading
+  - Task Scheduler: auto-start MT5 terminal + `python engine.py --live` on boot
+  - Build `deploy.py` — one-command: git push → SSH into VPS → git pull → restart engine
+  - Open port 8080 for dashboard access from anywhere
+  - Test: reboot VPS, verify engine auto-starts and trades
 
 ### Phase 4 — Daily Performance Report (Step 14)
 - [ ] Auto-generate daily summary at 16:00 UTC session close
