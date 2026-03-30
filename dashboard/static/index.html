@@ -243,7 +243,7 @@
       <div class="stat-row">
         <div class="stat-item">
           <span class="stat-label">Starting balance</span>
-          <span class="stat-value val-muted">$20,000.00</span>
+          <span class="stat-value val-muted" id="start-balance">–</span>
         </div>
         <div class="stat-item">
           <span class="stat-label">Current balance</span>
@@ -395,7 +395,7 @@
   }
 
   let PAIRS = ['GBPUSD', 'USDCHF', 'GBPJPY'];  // updated from API on first refresh
-  const START = 20000;
+  let START = null;  // set from first equity record (no more hardcoded $20k)
   let _pairsInitialized = false;
 
   async function togglePause() {
@@ -576,12 +576,19 @@
     // ── Equity ────────────────────────────────────────────────────────────
     const eq = data.equity;
     if (eq && eq.length > 0) {
+      // Set starting balance from first equity record (not hardcoded)
+      if (START === null) {
+        START = parseFloat(eq[0].balance);
+      }
+      $('start-balance').textContent = fmtMoney(START);
+
       const latest = parseFloat(eq[eq.length - 1].balance);
-      const dd = ((START - latest) / START * 100).toFixed(2);
+      const peak = Math.max(START, ...eq.map(e => parseFloat(e.balance)));
+      const dd = ((peak - latest) / peak * 100).toFixed(2);
       const ddVal = parseFloat(dd);
       const ddEl = $('drawdown');
       ddEl.textContent = dd + '%';
-      // Color: green <2%, yellow 2-4%, red-orange 4-8%, red >8%
+      // Color: green <2%, yellow 2-4%, red >4%
       ddEl.className = ddVal <= 0 ? 'stat-value val-green'
                      : ddVal < 2 ? 'stat-value val-green'
                      : ddVal < 4 ? 'stat-value val-yellow'
@@ -591,7 +598,8 @@
       balEl.className = latest >= START ? 'stat-value val-green' : 'stat-value val-red';
     } else {
       $('drawdown').textContent = '0.00%'; $('drawdown').className = 'stat-value val-green';
-      $('balance').textContent = '$20,000.00'; $('balance').className = 'stat-value val-muted';
+      $('start-balance').textContent = '–';
+      $('balance').textContent = '–'; $('balance').className = 'stat-value val-muted';
     }
 
     const pnlEl = $('open-pnl');
@@ -671,8 +679,9 @@
       equityChart.data.labels = eq.map(e => shortTime(e.recorded_at));
       equityChart.data.datasets[0].data = eq.map(e => parseFloat(e.balance));
       const last = parseFloat(eq[eq.length - 1].balance);
-      equityChart.data.datasets[0].borderColor = last >= START ? '#3fb950' : '#f85149';
-      equityChart.data.datasets[0].backgroundColor = last >= START
+      const startRef = START || last;
+      equityChart.data.datasets[0].borderColor = last >= startRef ? '#3fb950' : '#f85149';
+      equityChart.data.datasets[0].backgroundColor = last >= startRef
         ? 'rgba(63,185,80,0.06)' : 'rgba(248,81,73,0.06)';
       equityChart.update('none');
     }
