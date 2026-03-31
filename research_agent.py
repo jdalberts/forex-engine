@@ -137,7 +137,7 @@ Remember: output ONLY the JSON object, no markdown formatting, no code fences.""
     log.info("Calling Claude API for research scan...")
     try:
         response = client.messages.create(
-            model="claude-haiku-4-5-20241022",
+            model="claude-3-5-haiku-20241022",
             max_tokens=2000,
             temperature=0,
             system=SYSTEM_PROMPT,
