@@ -139,18 +139,16 @@ System went from losing (PF 0.79) to profitable (PF 1.12, +8.5%/pair) after Step
 #### Deployment
 - [x] Step 7: Auto-launch engine — Task Scheduler on Contabo VPS (engine + MT5 auto-start on boot)
 - [ ] Telegram daily performance report at 16:00 UTC session close
-- [ ] Weekly auto-research agent (`research_agent.py`) — runs every Sunday evening via Task Scheduler:
-  - Calls Claude API with web search to scan 4 topics: strategy research, tool/API updates, news source monitoring, SA regulation
-  - Compares findings against current memory, flags what's new
-  - Updates `memory/research_unified_engine.md` with new findings
-  - Sends Telegram digest with key changes
-  - Estimated Claude API cost: ~$0.10-0.30/week
+- [x] Weekly auto-research agent (`research_agent.py`) — deployed on VPS, runs Sundays 18:00 UTC via Task Scheduler
 - [x] Contabo Windows VPS deployment (~€11.10/month) — DEPLOYED 2026-03-31:
   - VPS: 4 vCPU, 8GB RAM, 150GB SSD, EU region
   - Python 3.11, Git, MT5 Pepperstone, all deps installed
   - Engine running 24/7 with `--live` flag
-  - Task Scheduler: auto-start MT5 + engine on boot
+  - 4 Task Scheduler jobs: MT5 (with /autotrading), Engine (1min delay), Dashboard (2min delay), Research (Sundays)
+  - MT5 terminal.ini: AllowLiveTrading=1 (persists AutoTrading across reboots)
   - Dashboard: http://167.86.95.212:8080
+  - AI Sentiment: Finnhub + Claude Haiku live, scoring 5 pairs every 15 min
+  - Per-asset params: commodities use optimized params, forex uses PF 1.42 params
   - Deploy updates: git push locally → git pull on VPS
 
 ### Phase 4 — Daily Performance Report (Step 14)

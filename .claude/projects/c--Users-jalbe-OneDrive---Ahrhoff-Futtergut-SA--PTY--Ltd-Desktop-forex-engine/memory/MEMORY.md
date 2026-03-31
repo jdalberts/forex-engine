@@ -1,13 +1,12 @@
 - [Unified Engine Roadmap](project_upgrade_roadmap.md) — Master plan: expand to commodities/futures with AI macro. 7 phases, 4-6 months.
 - [Research Findings](research_unified_engine.md) — Deep research: commodity futures highest impact, Pepperstone has 40+ commodities, AI news +0.1-0.2 Sharpe
-- [Profitability Results](project_profitability_plan.md) — PF 1.42, +55%/pair, all 3 pairs profitable (USDCHF +105%, GBPUSD +36%, GBPJPY +24%)
-- [Pair Selection](project_pair_selection.md) — EURUSD dropped, trading GBPUSD + USDCHF + GBPJPY
+- [Profitability Results](project_profitability_plan.md) — PF 1.42, +55%/pair, all 3 forex pairs profitable (USDCHF +105%, GBPUSD +36%, GBPJPY +24%)
+- [Pair Selection](project_pair_selection.md) — EURUSD dropped, trading GBPUSD + USDCHF + GBPJPY + XAUUSD + SPOTCRUDE (commodities on demo)
 - [Session window optimal](feedback_session_window.md) — 12-16 UTC confirmed best, wider windows add noise
 - [MT5 micro lots](feedback_micro_lots.md) — Small accounts need 0.01 lot minimum, not 1.0 standard. Critical for live with <$10k
-- **VPS DEPLOYED:** Contabo Windows VPS (EU, 4 vCPU, 8GB RAM, €11.10/mo). Engine live 24/7. Dashboard: http://167.86.95.212:8080. Auto-start on reboot (Task Scheduler). Deploy updates: git push → git pull on VPS.
-- **Dashboard $20k bug FIXED** — starting balance now reads from DB, drawdown uses peak equity
-- **Research agent BUILT + DEPLOYED** — `research_agent.py` on VPS, ANTHROPIC_API_KEY in .env, Task Scheduler runs Sundays 18:00 UTC
-- **Commodities live on demo (2026-03-31):** Gold (XAUUSD) and Oil (SpotCrude) added to config. Not optimized yet — running with forex params on demo. Gold optimizer: +64% but 35 trades (unreliable). Oil optimizer still pending. Per-pair spread limits: forex 2.0 pips, commodities 5.0 pips.
-- **AI Sentiment LIVE (2026-03-31):** Finnhub headlines + Claude 3 Haiku scoring. Working on VPS — GBPUSD bearish 80%, SPOTCRUDE bullish 80%. Model: claude-3-haiku-20240307. Cost ~$0.25/month. Note: space after = in .env breaks API key loading.
+- **VPS FULLY DEPLOYED (2026-03-31):** Contabo EU, 4vCPU, 8GB, €11.10/mo. Dashboard: http://167.86.95.212:8080. 4 auto-start tasks: MT5 (/autotrading), Engine (1min), Dashboard (2min), Research (Sundays). MT5 terminal.ini forces AutoTrading=1 on boot.
+- **AI Sentiment LIVE:** Finnhub headlines + Claude 3 Haiku. Model: claude-3-haiku-20240307. Working on VPS. Note: no space after = in .env keys.
+- **Per-asset params BUILT:** Commodities (Gold, Oil) use their own optimized params. Forex uses global PF 1.42 params. Oil: +29.6%, 86 trades, DD 6.2%. Gold: +64% but only 35 trades (unreliable).
+- **Oil optimizer results:** RSI 25/75, EMA 12/50, Stop 2.0/2.5x, Target 5.0/6.0x, ADX≥20, Hold≤30
 - [SAVE = everything](feedback_save_means_everything.md) — "Save" means: memory + roadmap + git commit + git push + confirm all 4. NEVER leave unpushed commits.
 - [Run heavy commands externally](feedback_run_heavy_commands_externally.md) — VS Code terminal hangs on long commands, use external PowerShell
