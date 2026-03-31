@@ -37,6 +37,7 @@ from risk.guard import (CorrelationGuard, DailyLossGuard, EquityGuard,    # [NEW
                         PositionSizer, SessionGate, SpreadFilter,         # [NEW — Step 5]
                         TrailingStopManager)                              # [NEW — Step 5]
 from strategy import mean_reversion
+from data.sentiment import SentimentFilter, refresh_sentiment        # [NEW — AI sentiment]
 from strategy.cot_bias import CotBias                               # [NEW — Step 10]
 from strategy.mtf_filter import confirm_entry                       # [NEW — Step 7B]
 from strategy.regime_detection import detect_market_regime          # [NEW — Step 4]
@@ -206,6 +207,7 @@ def run(dry_run: bool = True) -> None:
     trailing     = TrailingStopManager(db_path=config.DB_PATH)              # [NEW — Step 9] persist _best
     corr_guard   = CorrelationGuard()                                       # [NEW — Step 7A]
     cot_filter   = CotBias(db_path=config.DB_PATH)                         # [NEW — Step 10]
+    sent_filter  = SentimentFilter()                                         # [NEW — AI sentiment]
 
     # ── Execution ─────────────────────────────────────────────────────────────
     gateway = ExecutionGateway(
@@ -275,6 +277,10 @@ def run(dry_run: bool = True) -> None:
         if _now_mono - _last_news_refresh >= config.COT_REFRESH_INTERVAL_SEC:
             refresh_news_cache(now)
             _last_news_refresh = _now_mono
+
+        # [NEW — AI sentiment] Refresh headline sentiment every 15 min during session
+        if in_session:
+            refresh_sentiment()
 
         # [NEW — Step 8] Mid-session position sync — detect positions IG closed
         if _now_mono - _last_position_sync >= config.POSITION_SYNC_INTERVAL_SEC:
@@ -419,6 +425,11 @@ def run(dry_run: bool = True) -> None:
                 if _cot_bias != "neutral" and _cot_bias != signal_data["direction"]:
                     log.info("[%s] COT bias is %s — blocking %s signal",
                              symbol, _cot_bias, signal_data["direction"])
+                    signal_data = None
+
+            # [NEW — AI sentiment] Block signals against strong headline sentiment
+            if signal_data:
+                if not sent_filter.allow_trade(symbol, signal_data["direction"]):
                     signal_data = None
 
             if signal_data:

@@ -148,6 +148,12 @@ COT_SHORT_THRESHOLD: float    = 0.8   # index above this → specs extremely lon
 COT_WEEKS_HISTORY: int        = 52    # rolling window for min/max normalisation
 COT_REFRESH_INTERVAL_SEC: int = 3600  # re-download current year file every hour
 
+# ── AI Sentiment [NEW — AI Layer] ───────────────────────────────────────────
+FINNHUB_API_KEY: str         = os.environ.get("FINNHUB_API_KEY", "")
+SENTIMENT_ENABLED: bool      = bool(FINNHUB_API_KEY and os.environ.get("ANTHROPIC_API_KEY", ""))
+SENTIMENT_REFRESH_SEC: int   = 900  # refresh headlines every 15 min during session
+SENTIMENT_BLOCK_THRESHOLD: float = 0.5  # block trades when sentiment confidence > this
+
 # ── Telegram Alerts [NEW — Step 13] ──────────────────────────────────────────
 TELEGRAM_TOKEN:   str  = os.environ.get("TELEGRAM_TOKEN",   "")
 TELEGRAM_CHAT_ID: str  = os.environ.get("TELEGRAM_CHAT_ID", "")
