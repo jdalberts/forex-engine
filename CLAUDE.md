@@ -137,7 +137,7 @@ System went from losing (PF 0.79) to profitable (PF 1.12, +8.5%/pair) after Step
 - [ ] WebSocket for real-time updates (replace 5s polling)
 
 #### Deployment
-- [ ] Step 7: Auto-launch engine — Windows Task Scheduler before 14:00 SAST daily
+- [x] Step 7: Auto-launch engine — Task Scheduler on Contabo VPS (engine + MT5 auto-start on boot)
 - [ ] Telegram daily performance report at 16:00 UTC session close
 - [ ] Weekly auto-research agent (`research_agent.py`) — runs every Sunday evening via Task Scheduler:
   - Calls Claude API with web search to scan 4 topics: strategy research, tool/API updates, news source monitoring, SA regulation
@@ -145,14 +145,13 @@ System went from losing (PF 0.79) to profitable (PF 1.12, +8.5%/pair) after Step
   - Updates `memory/research_unified_engine.md` with new findings
   - Sends Telegram digest with key changes
   - Estimated Claude API cost: ~$0.10-0.30/week
-- [ ] Contabo Windows VPS deployment (~$15/month):
-  - Sign up for Contabo Windows VPS (4GB RAM, 2 vCPU minimum)
-  - Install: Python 3.11+, MT5 terminal, Git, pip install requirements
-  - Clone repo, copy .env, configure MT5 login, enable AutoTrading
-  - Task Scheduler: auto-start MT5 terminal + `python engine.py --live` on boot
-  - Build `deploy.py` — one-command: git push → SSH into VPS → git pull → restart engine
-  - Open port 8080 for dashboard access from anywhere
-  - Test: reboot VPS, verify engine auto-starts and trades
+- [x] Contabo Windows VPS deployment (~€11.10/month) — DEPLOYED 2026-03-31:
+  - VPS: 4 vCPU, 8GB RAM, 150GB SSD, EU region
+  - Python 3.11, Git, MT5 Pepperstone, all deps installed
+  - Engine running 24/7 with `--live` flag
+  - Task Scheduler: auto-start MT5 + engine on boot
+  - Dashboard: http://167.86.95.212:8080
+  - Deploy updates: git push locally → git pull on VPS
 
 ### Phase 4 — Daily Performance Report (Step 14)
 - [ ] Auto-generate daily summary at 16:00 UTC session close

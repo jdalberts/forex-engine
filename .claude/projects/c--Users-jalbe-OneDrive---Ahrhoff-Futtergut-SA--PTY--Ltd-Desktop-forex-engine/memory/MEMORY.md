@@ -1,0 +1,11 @@
+- [Unified Engine Roadmap](project_upgrade_roadmap.md) — Master plan: expand to commodities/futures with AI macro. 7 phases, 4-6 months.
+- [Research Findings](research_unified_engine.md) — Deep research: commodity futures highest impact, Pepperstone has 40+ commodities, AI news +0.1-0.2 Sharpe
+- [Profitability Results](project_profitability_plan.md) — PF 1.42, +55%/pair, all 3 pairs profitable (USDCHF +105%, GBPUSD +36%, GBPJPY +24%)
+- [Pair Selection](project_pair_selection.md) — EURUSD dropped, trading GBPUSD + USDCHF + GBPJPY
+- [Session window optimal](feedback_session_window.md) — 12-16 UTC confirmed best, wider windows add noise
+- [MT5 micro lots](feedback_micro_lots.md) — Small accounts need 0.01 lot minimum, not 1.0 standard. Critical for live with <$10k
+- **VPS DEPLOYED:** Contabo Windows VPS (EU, 4 vCPU, 8GB RAM, €11.10/mo). Engine live 24/7. Dashboard: http://167.86.95.212:8080. Auto-start on reboot (Task Scheduler). Deploy updates: git push → git pull on VPS.
+- **Dashboard $20k bug FIXED** — starting balance now reads from DB, drawdown uses peak equity
+- **Research agent BUILT** — `research_agent.py` ready, needs ANTHROPIC_API_KEY in .env + Task Scheduler setup on VPS
+- [SAVE = everything](feedback_save_means_everything.md) — "Save" means: memory + roadmap + git commit + git push + confirm all 4. NEVER leave unpushed commits.
+- [Run heavy commands externally](feedback_run_heavy_commands_externally.md) — VS Code terminal hangs on long commands, use external PowerShell
