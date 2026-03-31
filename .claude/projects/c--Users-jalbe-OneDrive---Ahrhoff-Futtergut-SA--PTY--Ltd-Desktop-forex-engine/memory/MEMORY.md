@@ -6,6 +6,7 @@
 - [MT5 micro lots](feedback_micro_lots.md) — Small accounts need 0.01 lot minimum, not 1.0 standard. Critical for live with <$10k
 - **VPS DEPLOYED:** Contabo Windows VPS (EU, 4 vCPU, 8GB RAM, €11.10/mo). Engine live 24/7. Dashboard: http://167.86.95.212:8080. Auto-start on reboot (Task Scheduler). Deploy updates: git push → git pull on VPS.
 - **Dashboard $20k bug FIXED** — starting balance now reads from DB, drawdown uses peak equity
-- **Research agent BUILT** — `research_agent.py` ready, needs ANTHROPIC_API_KEY in .env + Task Scheduler setup on VPS
+- **Research agent BUILT + DEPLOYED** — `research_agent.py` on VPS, ANTHROPIC_API_KEY in .env, Task Scheduler runs Sundays 18:00 UTC
+- **Commodity backtests (2026-03-31):** Gold (XAUUSD) and Oil (SpotCrude) added to config but NOT profitable with forex params. Gold optimizer found +64% but only 35 trades (unreliable). Oil optimizer running. Need per-asset parameters before adding commodities live. Keep 3 forex pairs only for now.
 - [SAVE = everything](feedback_save_means_everything.md) — "Save" means: memory + roadmap + git commit + git push + confirm all 4. NEVER leave unpushed commits.
 - [Run heavy commands externally](feedback_run_heavy_commands_externally.md) — VS Code terminal hangs on long commands, use external PowerShell
