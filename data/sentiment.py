@@ -121,7 +121,7 @@ JSON schema:
 
     try:
         response = client.messages.create(
-            model="claude-haiku-4-5-20241022",
+            model="claude-3-haiku-20240307",
             max_tokens=200,
             temperature=0,
             messages=[{"role": "user", "content": prompt}],
