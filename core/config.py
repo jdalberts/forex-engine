@@ -41,12 +41,35 @@ PAIRS: dict = {
     # mt5_symbol:  MT5 symbol name  (used when BROKER=mt5)
     # price_scale: divide raw IG price by this (MT5 always returns readable prices, uses 1)
     # EURUSD removed — unprofitable across all 256 parameter combos on 50k bars (best: -8.4%)
+    # Forex pairs — optimized params from medium grid (PF 1.42)
     "GBPUSD": {"epic": "CS.D.GBPUSD.CFD.IP", "mt5_symbol": "GBPUSD", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0,  "price_scale": 1, "max_spread_pips": 2.0},
     "USDCHF": {"epic": "CS.D.USDCHF.CFD.IP", "mt5_symbol": "USDCHF", "currency": "CHF", "pip_size": 0.0001, "pip_value_usd": 12.5,  "price_scale": 1, "max_spread_pips": 2.0},
     "GBPJPY": {"epic": "CS.D.GBPJPY.CFD.IP", "mt5_symbol": "GBPJPY", "currency": "JPY", "pip_size": 0.01,   "pip_value_usd":  6.3,  "price_scale": 1, "max_spread_pips": 3.0},
-    # Commodity CFDs — Pepperstone MT5 (continuous, no rollover)
-    "XAUUSD": {"epic": "CS.D.CFEGOLD.CFE.IP", "mt5_symbol": "XAUUSD", "currency": "USD", "pip_size": 0.10,   "pip_value_usd": 10.0,  "price_scale": 1, "max_spread_pips": 5.0},
-    "SPOTCRUDE": {"epic": "CS.D.OILCRUD.CFE.IP", "mt5_symbol": "SpotCrude", "currency": "USD", "pip_size": 0.01, "pip_value_usd": 1.0, "price_scale": 1, "max_spread_pips": 5.0},
+    # Commodity CFDs — per-asset optimized params (override globals)
+    "XAUUSD": {
+        "epic": "CS.D.CFEGOLD.CFE.IP", "mt5_symbol": "XAUUSD", "currency": "USD",
+        "pip_size": 0.10, "pip_value_usd": 10.0, "price_scale": 1, "max_spread_pips": 5.0,
+        # Gold optimizer: +64.6%, 35 trades, DD 31.2% (low confidence — few trades)
+        "strategy_params": {
+            "mr_rsi_oversold": 20, "mr_rsi_overbought": 80,
+            "mr_stop_mult": 2.0, "mr_target_mult": 4.0,
+            "tf_fast_ema": 12, "tf_slow_ema": 50,
+            "tf_stop_mult": 2.5, "tf_target_mult": 5.0,
+            "adx_threshold": 25, "trail_atr": 1.5, "max_hold": 30,
+        },
+    },
+    "SPOTCRUDE": {
+        "epic": "CS.D.OILCRUD.CFE.IP", "mt5_symbol": "SpotCrude", "currency": "USD",
+        "pip_size": 0.01, "pip_value_usd": 1.0, "price_scale": 1, "max_spread_pips": 5.0,
+        # Oil optimizer: +29.6%, 86 trades, DD 6.2% (solid)
+        "strategy_params": {
+            "mr_rsi_oversold": 25, "mr_rsi_overbought": 75,
+            "mr_stop_mult": 2.0, "mr_target_mult": 5.0,
+            "tf_fast_ema": 12, "tf_slow_ema": 50,
+            "tf_stop_mult": 2.5, "tf_target_mult": 6.0,
+            "adx_threshold": 20, "trail_atr": 1.5, "max_hold": 30,
+        },
+    },
 }
 
 # ── Session window (UTC) ──────────────────────────────────────────────────────

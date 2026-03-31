@@ -72,6 +72,52 @@ def _alert(msg: str) -> None:
 _running = True
 
 
+# [NEW — Per-asset params] Apply/restore strategy parameters per instrument
+import strategy.mean_reversion as _mr_mod
+import strategy.trend_following as _tf_mod
+import strategy.regime_detection as _rd_mod
+
+_GLOBAL_PARAMS = None  # saved on first call
+
+
+def _save_global_params():
+    """Save global strategy params so we can restore after per-asset override."""
+    global _GLOBAL_PARAMS
+    if _GLOBAL_PARAMS is not None:
+        return
+    _GLOBAL_PARAMS = {
+        "mr_rsi_oversold": _mr_mod.RSI_OVERSOLD,
+        "mr_rsi_overbought": _mr_mod.RSI_OVERBOUGHT,
+        "mr_stop_mult": _mr_mod.STOP_ATR_MULT,
+        "mr_target_mult": _mr_mod.TARGET_ATR_MULT,
+        "tf_fast_ema": _tf_mod.FAST_EMA_PERIOD,
+        "tf_slow_ema": _tf_mod.SLOW_EMA_PERIOD,
+        "tf_stop_mult": _tf_mod.STOP_ATR_MULT,
+        "tf_target_mult": _tf_mod.TARGET_ATR_MULT,
+        "adx_threshold": _rd_mod.ADX_TREND_THRESHOLD,
+        "trail_atr": config.TRAILING_ATR_MULT,
+    }
+
+
+def _apply_params(params: dict):
+    """Apply strategy params (either per-asset or global)."""
+    _mr_mod.RSI_OVERSOLD = params["mr_rsi_oversold"]
+    _mr_mod.RSI_OVERBOUGHT = params["mr_rsi_overbought"]
+    _mr_mod.STOP_ATR_MULT = params["mr_stop_mult"]
+    _mr_mod.TARGET_ATR_MULT = params["mr_target_mult"]
+    _tf_mod.FAST_EMA_PERIOD = params["tf_fast_ema"]
+    _tf_mod.SLOW_EMA_PERIOD = params["tf_slow_ema"]
+    _tf_mod.STOP_ATR_MULT = params["tf_stop_mult"]
+    _tf_mod.TARGET_ATR_MULT = params["tf_target_mult"]
+    _rd_mod.ADX_TREND_THRESHOLD = params["adx_threshold"]
+
+
+def _restore_global_params():
+    """Restore global params after per-asset override."""
+    if _GLOBAL_PARAMS:
+        _apply_params(_GLOBAL_PARAMS)
+
+
 # [NEW — Step 4] Strategy switcher ────────────────────────────────────────────
 def select_strategy(regime: str, bars: list[dict]):
     """
@@ -401,8 +447,18 @@ def run(dry_run: bool = True) -> None:
                 log.warning("[%s] Only %d cached bars — need at least %d", symbol, len(bars), config.ENGINE_STRATEGY_MIN_BARS)
                 continue
 
+            # [NEW — Per-asset params] Apply asset-specific strategy params if configured
+            _save_global_params()
+            asset_params = pcfg.get("strategy_params")
+            if asset_params:
+                _apply_params(asset_params)
+
             regime      = detect_market_regime(bars)            # [NEW — Step 4]
             signal_data = select_strategy(regime, bars)        # [NEW — Step 4]
+
+            # Restore global params after strategy evaluation
+            if asset_params:
+                _restore_global_params()
 
             # [NEW — Step 7A] Correlation guard — block if same USD-direction group is occupied
             if signal_data:
