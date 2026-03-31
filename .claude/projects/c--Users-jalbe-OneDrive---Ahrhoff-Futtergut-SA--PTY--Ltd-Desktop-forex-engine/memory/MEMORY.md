@@ -7,6 +7,7 @@
 - **VPS DEPLOYED:** Contabo Windows VPS (EU, 4 vCPU, 8GB RAM, €11.10/mo). Engine live 24/7. Dashboard: http://167.86.95.212:8080. Auto-start on reboot (Task Scheduler). Deploy updates: git push → git pull on VPS.
 - **Dashboard $20k bug FIXED** — starting balance now reads from DB, drawdown uses peak equity
 - **Research agent BUILT + DEPLOYED** — `research_agent.py` on VPS, ANTHROPIC_API_KEY in .env, Task Scheduler runs Sundays 18:00 UTC
-- **Commodity backtests (2026-03-31):** Gold (XAUUSD) and Oil (SpotCrude) added to config but NOT profitable with forex params. Gold optimizer found +64% but only 35 trades (unreliable). Oil optimizer running. Need per-asset parameters before adding commodities live. Keep 3 forex pairs only for now.
+- **Commodities live on demo (2026-03-31):** Gold (XAUUSD) and Oil (SpotCrude) added to config. Not optimized yet — running with forex params on demo. Gold optimizer: +64% but 35 trades (unreliable). Oil optimizer still pending. Per-pair spread limits: forex 2.0 pips, commodities 5.0 pips.
+- **AI Sentiment LIVE (2026-03-31):** Finnhub headlines + Claude 3 Haiku scoring. Working on VPS — GBPUSD bearish 80%, SPOTCRUDE bullish 80%. Model: claude-3-haiku-20240307. Cost ~$0.25/month. Note: space after = in .env breaks API key loading.
 - [SAVE = everything](feedback_save_means_everything.md) — "Save" means: memory + roadmap + git commit + git push + confirm all 4. NEVER leave unpushed commits.
 - [Run heavy commands externally](feedback_run_heavy_commands_externally.md) — VS Code terminal hangs on long commands, use external PowerShell
