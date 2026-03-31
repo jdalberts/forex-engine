@@ -205,6 +205,14 @@
     <div class="filter-grid" id="filter-grid"></div>
   </div>
 
+  <!-- Row 2b: Market Headlines -->
+  <div class="card row">
+    <div class="card-title">Market Headlines (AI Sentiment)</div>
+    <div id="headlines-body" style="max-height:200px;overflow-y:auto;font-size:12px">
+      <span style="color:var(--muted)">Loading headlines...</span>
+    </div>
+  </div>
+
   <!-- Row 3: Session & Risk | Equity | Trade Stats -->
   <div class="grid-3 row">
 
@@ -482,6 +490,7 @@
             <div class="filter-row"><span class="filter-key">COT Bias</span><span id="flt-cot-${sym}">–</span></div>
             <div class="filter-row"><span class="filter-key">Session</span><span id="flt-session-${sym}">–</span></div>
             <div class="filter-row"><span class="filter-key">News</span><span id="flt-news-${sym}">–</span></div>
+            <div class="filter-row"><span class="filter-key">AI Sentiment</span><span id="flt-sent-${sym}">–</span></div>
           </div>`;
       });
       _pairsInitialized = true;
@@ -566,6 +575,16 @@
       $(`flt-news-${sym}`).innerHTML    = data.news_active
         ? tag('news-paused', 'Paused')
         : tag('news-clear',  'Clear');
+      // AI Sentiment
+      const sent = ps?.sentiment || 'No data';
+      const sentEl = $(`flt-sent-${sym}`);
+      if (sentEl) {
+        const sentLower = sent.toLowerCase();
+        const sentClass = sentLower.includes('bullish') ? 'long'
+                        : sentLower.includes('bearish') ? 'short'
+                        : 'neutral';
+        sentEl.innerHTML = tag(sentClass, sent);
+      }
     });
 
     // ── Session text ──────────────────────────────────────────────────────
@@ -729,8 +748,32 @@
     $('last-update').textContent = 'Updated ' + new Date().toLocaleTimeString();
   }
 
+  // ── Headlines fetch (separate, less frequent) ────────────────────────
+  async function refreshHeadlines() {
+    try {
+      const res = await fetch('/api/headlines');
+      if (!res.ok) return;
+      const data = await res.json();
+      const el = $('headlines-body');
+      if (data.headlines && data.headlines.length > 0) {
+        el.innerHTML = data.headlines.map(h => {
+          const time = h.datetime ? new Date(h.datetime * 1000).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+          return `<div style="padding:4px 0;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:baseline">
+            <span style="color:var(--muted);font-size:10px;white-space:nowrap">${time}</span>
+            <span style="color:var(--blue);font-size:10px;white-space:nowrap">${h.source || ''}</span>
+            <a href="${h.url || '#'}" target="_blank" style="color:var(--text);text-decoration:none;flex:1" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--text)'">${h.headline || ''}</a>
+          </div>`;
+        }).join('');
+      } else {
+        el.innerHTML = '<span style="color:var(--muted)">No headlines (Finnhub API key not set)</span>';
+      }
+    } catch {}
+  }
+
   refresh();
+  refreshHeadlines();
   setInterval(refresh, 5000);
+  setInterval(refreshHeadlines, 60000);  // headlines every 60s
 </script>
 </body>
 </html>

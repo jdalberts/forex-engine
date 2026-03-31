@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from core import config, db
 from data.news_filter import is_news_window, next_news_event, refresh_news_cache
+from data.sentiment import SentimentFilter, refresh_sentiment, _sentiment_cache, _fetch_headlines
 from strategy.cot_bias import CotBias
 from strategy.regime_detection import detect_market_regime
 
@@ -167,6 +168,10 @@ def state():
             if row:
                 last_signal = dict(row)
 
+        # AI sentiment
+        sent_data = _sentiment_cache.get(symbol, {})
+        sentiment_str = SentimentFilter().get_summary(symbol)
+
         pairs_state[symbol] = {
             "quote":       dict(quote) if quote else None,
             "spread_pips": spread_pips,
@@ -174,6 +179,7 @@ def state():
             "live_pnl":    live_pnl,
             "regime":      regime,
             "cot_bias":    cot_bias,
+            "sentiment":   sentiment_str,
             "last_signal": last_signal,
         }
 
@@ -196,6 +202,24 @@ def state():
         "engine_paused": PAUSE_FILE.exists(),
         "active_pairs":  list(config.PAIRS.keys()),
     })
+
+
+@app.get("/api/headlines")
+def headlines_api():
+    """Return recent market headlines with sentiment."""
+    headlines = _fetch_headlines(category="general", count=20)
+    result = []
+    for h in headlines:
+        result.append({
+            "headline": h.get("headline", ""),
+            "source": h.get("source", ""),
+            "url": h.get("url", ""),
+            "datetime": h.get("datetime", 0),
+            "summary": (h.get("summary", "") or "")[:200],
+        })
+    # Include per-pair sentiment scores
+    sentiment = {sym: _sentiment_cache.get(sym, {}) for sym in config.PAIRS}
+    return JSONResponse({"headlines": result, "sentiment": sentiment})
 
 
 @app.post("/api/engine/pause")
