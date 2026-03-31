@@ -69,102 +69,77 @@ check our DB, we might try to close an already-closed position, causing an API e
 
 ## Development Roadmap
 
-### Phase 1 — Fix Critical Bugs (Do First)
-- [ ] Fix trailing stop None target (BUG 1)
-- [ ] Fix EquityGuard high-water mark (BUG 2)
-- [ ] Fix DailyLossGuard reset timing (BUG 3)
-- [ ] Fix position sync race condition (BUG 4)
-- [ ] Add HTTP timeouts to COT fetcher and news scraper (M3, M4)
+### COMPLETED — Foundation & Optimization
+- [x] Critical bugs fixed (BUG 1-4, exception handling, MT5 timezone, position limits)
+- [x] Backtester: trailing stop sim, next-bar entry, 0.5pip slippage, 2pip spread
+- [x] Parameter optimization: PF 0.79 → PF 1.42, +55%/pair (medium grid, 2592 combos)
+- [x] Walk-forward validation: 42.9% OOS profitable, avg +0.15%/month
+- [x] ADX direction filter: +DI/-DI confirms trend signals
+- [x] EURUSD dropped (unprofitable across all 256 combos)
+- [x] Session windows: 12-16 UTC confirmed optimal
+- [x] Code review: dead code removed, indicators centralized, specific exception handling
+- [x] Dashboard: pause/resume, live PnL fix, drawdown colors, dynamic pairs, starting balance fix
+- [x] MT5 micro lot sizing for small accounts
+- [x] Per-asset strategy parameters (commodities vs forex)
+- [x] AI Sentiment: Finnhub headlines + Claude Haiku scoring live
+- [x] Market headlines displayed on dashboard
 
-### Phase 2 — Backtester Improvements (Step 17)
-- [x] Add 2-pip spread cost per round-trip
-- [x] Multi-page OHLC fetch for 3000+ bars (MT5: 50k bars = 8 years)
-- [ ] Sharpe ratio calculation
-- [ ] Per-strategy breakdown (MR vs TF contribution)
+### COMPLETED — Deployment
+- [x] Contabo Windows VPS (EU, 4vCPU, 8GB, €11.10/mo) — DEPLOYED 2026-03-31
+- [x] 4 auto-start tasks: MT5 (/autotrading), Engine (1min), Dashboard (2min), Research (Sundays)
+- [x] MT5 terminal.ini: AutoTrading persists across reboots
+- [x] Dashboard: http://167.86.95.212:8080
+- [x] Weekly research agent: Sundays 18:00 UTC via Task Scheduler
+- [x] Deploy workflow: git push locally → git pull on VPS
 
-### Phase 2B — Profitability Optimization (2026-03-26)
-System went from losing (PF 0.79) to profitable (PF 1.12, +8.5%/pair) after Steps 1-2.
-- [x] Step 1: Fix backtest accuracy (trailing stop sim, next-bar entry, 0.5pip slippage)
-- [x] Step 2: Parameter optimization — RSI 25/75, stops 2.0-2.5×, EMA 20/50, ADX≥20, hold≤30
-- [x] Step 3: Walk-forward validation — 42% OOS windows profitable, avg +0.11% (has edge)
-- [x] Step 4: Per-pair analysis — USDCHF +35%, GBPUSD +10%, GBPJPY -3.6%, EURUSD -7.6%
-- [x] Step 5: Enhancements tried — MACD filter killed MR signals, breakeven stop neutral
-- [x] Step 6a: Pair selection — EURUSD dropped (unprofitable across all 256 param combos). Keeping USDCHF (+40.6%), GBPUSD (+6.2%), GBPJPY (-2.3% diversification)
-- [x] Step 6b: ADX direction filter for TF — only long when +DI > -DI (PF 1.13 → 1.19)
-- [x] Step 6c: Session windows tested — 12-16 UTC confirmed optimal, wider windows hurt returns
-- [x] Step 6d: Medium grid optimizer (2592 combos) — PF 1.42, +55%/pair, all 3 pairs profitable. Params applied.
-- [x] Step 6e: Walk-forward re-validated — 42.9% OOS profitable, avg +0.15%/month (positive edge)
-- [ ] Step 6f: FULL grid optimizer (~209k combos, ~18 hours overnight) — run `python optimize.py --bars 50000 --top 20` in external terminal, leave overnight. Could find even better params beyond medium grid.
-- [ ] Step 7: Auto-launch engine — set up Windows scheduled task or startup script to run `python engine.py` before 14:00 SAST daily
-
-### Phase 3 — Walk-Forward Validation (Step 15)
-- [ ] Rolling window validation (6mo in-sample, 1mo out-of-sample) → merged into Phase 2B Step 3
-- [ ] Detect parameter overfitting before going live
-- [x] Need 2-3 years of OHLC data (MT5: 8 years fetched 2026-03-26)
-
-### Phase 3B — Code Review Fixes (2026-03-26 review)
-
-#### Bugs — Fix Before Live
-- [x] BUG 3: DailyLossGuard — already fixed in DB layer (uses 16:00 UTC session close)
-- [x] Replace bare `except Exception` with specific catches in engine.py (4 locations)
-- [ ] IG client: verify re-auth succeeded before retrying on 401 (`core/ig_client.py`)
-- [x] MT5 client: fix timezone — now uses UTC instead of local time
-- [x] Max-position-per-pair — already enforced in engine + gateway
-- [ ] News filter: fix DST transition calculation (`data/news_filter.py`)
-- [x] Add MetaTrader5 to requirements.txt
-- [ ] Remove hardcoded IG account ID default from config.py
-
-#### Code Cleanup
-- [x] Remove dead `_vwap()` function from `strategy/mean_reversion.py`
-- [x] Move `adx_full()` to `strategy/indicators.py` (shared, no longer private)
-- [ ] Remove orphaned test files: test_regime.py, test_switcher.py, test_trend.py
-- [ ] Create `.env.example` template
-
-#### Dashboard/UI — Done
-- [x] Pause/resume button (file-based engine pause, quotes keep flowing)
-- [x] Fix live PnL direction — normalizes "long"/"BUY" variants
-- [x] Error handling in `/api/state` — regime/COT wrapped in try/except
-- [x] Color-code drawdown: green <2%, yellow 2-4%, red >4%
-- [x] Dynamic pairs from API (no more hardcoded EURUSD)
-- [x] "Session PnL" label (was "Today's PnL")
-
-#### Dashboard/UI — Remaining
-- [ ] **FIX: Starting balance hardcoded $20,000** — dashboard HTML and JS use `START = 20000`. Should read from broker API or config. Drawdown shows 95% because it compares $999 vs $20,000 instead of actual starting balance.
+### Phase 4 — Remaining Polish
+- [ ] Telegram daily performance report at 16:00 UTC session close
 - [ ] Add filter summary per pair ("USDCHF: Blocked — High Vol + News")
 - [ ] Add soft/hard drawdown limit lines to equity curve chart
 - [ ] Add trade entry/exit markers on equity curve
-- [ ] Add Sharpe ratio to backtest stats display
+- [ ] Add Sharpe ratio to backtest stats
 - [ ] WebSocket for real-time updates (replace 5s polling)
+- [ ] Create `.env.example` template
+- [ ] Remove orphaned test files: test_regime.py, test_switcher.py, test_trend.py
+- [ ] News filter: fix DST transition calculation
 
-#### Deployment
-- [x] Step 7: Auto-launch engine — Task Scheduler on Contabo VPS (engine + MT5 auto-start on boot)
-- [ ] Telegram daily performance report at 16:00 UTC session close
-- [x] Weekly auto-research agent (`research_agent.py`) — deployed on VPS, runs Sundays 18:00 UTC via Task Scheduler
-- [x] Contabo Windows VPS deployment (~€11.10/month) — DEPLOYED 2026-03-31:
-  - VPS: 4 vCPU, 8GB RAM, 150GB SSD, EU region
-  - Python 3.11, Git, MT5 Pepperstone, all deps installed
-  - Engine running 24/7 with `--live` flag
-  - 4 Task Scheduler jobs: MT5 (with /autotrading), Engine (1min delay), Dashboard (2min delay), Research (Sundays)
-  - MT5 terminal.ini: AllowLiveTrading=1 (persists AutoTrading across reboots)
-  - Dashboard: http://167.86.95.212:8080
-  - AI Sentiment: Finnhub + Claude Haiku live, scoring 5 pairs every 15 min
-  - Per-asset params: commodities use optimized params, forex uses PF 1.42 params
-  - Deploy updates: git push locally → git pull on VPS
-
-### Phase 4 — Daily Performance Report (Step 14)
-- [ ] Auto-generate daily summary at 16:00 UTC session close
-- [ ] Send via Telegram: trades, PnL, win rate, balance, drawdown
-- [ ] Optional `/performance` dashboard page
-
-### Phase 5 — Live Account Migration (Step 16)
-- [ ] 500+ trades per pair in backtest
-- [ ] Walk-forward results acceptable
+### Phase 5 — Live Account Migration
+- [ ] Demo trade 200+ trades to validate live vs backtest
+- [ ] Walk-forward results acceptable on live data
 - [ ] All tests pass on live config
 - [ ] Initial live risk: `RISK_PER_TRADE=0.005` (0.5%) for first 2 weeks
 - [ ] Tighter `HARD_DRAWDOWN=0.05` (5%)
 - [ ] Separate live DB
 - [ ] Telegram alerts confirmed working
 - [ ] Manual kill-switch procedure documented
+- [ ] Consider UK VPS region for lower latency to Pepperstone
+
+### Phase 6 — Commodity Expansion
+- [x] Gold (XAUUSD) and Oil (SPOTCRUDE) added to config with per-asset params
+- [x] Gold optimizer: +64%, 35 trades (low confidence — needs more data)
+- [x] Oil optimizer: +29.6%, 86 trades, DD 6.2% (solid)
+- [ ] Run medium grid optimizer on Gold and Oil for better params
+- [ ] Walk-forward validate commodity strategies
+- [ ] Explore more Pepperstone commodities: NatGas, Copper, Wheat, Corn
+- [ ] Implement cross-asset correlation monitoring
+- [ ] Volatility-targeted position sizing across asset classes
+
+### Phase 7 — Stock Trading Exploration
+- [ ] Research: which indices/stocks available on Pepperstone MT5 (US500, NAS100, GER40, etc.)
+- [ ] Backtest existing MR+TF strategy on index CFDs (US500, NAS100)
+- [ ] Research stock-specific strategies: momentum, mean reversion, earnings-based
+- [ ] Explore individual stock CFDs if available on Pepperstone
+- [ ] Consider Interactive Brokers for broader stock/ETF access
+- [ ] Per-asset params for stock indices (different volatility profile)
+- [ ] Session window optimization for stock markets (NYSE 14:30-21:00 UTC)
+- [ ] Cross-asset portfolio: forex + commodities + indices risk management
+
+### Phase 8 — Unified Trading Engine (Long-term Vision)
+- [ ] Full project roadmap in `memory/project_upgrade_roadmap.md`
+- [ ] AI Global Macro news layer (Phase 3 of unified plan)
+- [ ] Multi-strategy router with adaptive weighting
+- [ ] NautilusTrader or PyBroker migration for production-grade execution
+- [ ] Portfolio-level risk management across all asset classes
 
 ---
 
