@@ -350,9 +350,11 @@ def run(dry_run: bool = True) -> None:
                 log.info("[%s] News window active — skipping signal", symbol)
                 continue
 
-            # 3. Spread filter
-            if not spread_filt.acceptable(quote["spread_pips"]):
-                log.info("[%s] Spread %.1f pips — too wide, skipping", symbol, quote["spread_pips"])
+            # 3. Spread filter (per-pair limit if configured, else global)
+            _max_spread = pcfg.get("max_spread_pips", config.MAX_SPREAD_PIPS)
+            if quote["spread_pips"] > _max_spread:
+                log.info("[%s] Spread %.1f pips > %.1f limit — too wide, skipping",
+                         symbol, quote["spread_pips"], _max_spread)
                 continue
 
             # 4. [NEW — Step 5] Daily loss limit — pause all new trades for today

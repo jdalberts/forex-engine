@@ -41,14 +41,12 @@ PAIRS: dict = {
     # mt5_symbol:  MT5 symbol name  (used when BROKER=mt5)
     # price_scale: divide raw IG price by this (MT5 always returns readable prices, uses 1)
     # EURUSD removed — unprofitable across all 256 parameter combos on 50k bars (best: -8.4%)
-    "GBPUSD": {"epic": "CS.D.GBPUSD.CFD.IP", "mt5_symbol": "GBPUSD", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0,  "price_scale": 1},
-    "USDCHF": {"epic": "CS.D.USDCHF.CFD.IP", "mt5_symbol": "USDCHF", "currency": "CHF", "pip_size": 0.0001, "pip_value_usd": 12.5,  "price_scale": 1},
-    "GBPJPY": {"epic": "CS.D.GBPJPY.CFD.IP", "mt5_symbol": "GBPJPY", "currency": "JPY", "pip_size": 0.01,   "pip_value_usd":  6.3,  "price_scale": 1},
+    "GBPUSD": {"epic": "CS.D.GBPUSD.CFD.IP", "mt5_symbol": "GBPUSD", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0,  "price_scale": 1, "max_spread_pips": 2.0},
+    "USDCHF": {"epic": "CS.D.USDCHF.CFD.IP", "mt5_symbol": "USDCHF", "currency": "CHF", "pip_size": 0.0001, "pip_value_usd": 12.5,  "price_scale": 1, "max_spread_pips": 2.0},
+    "GBPJPY": {"epic": "CS.D.GBPJPY.CFD.IP", "mt5_symbol": "GBPJPY", "currency": "JPY", "pip_size": 0.01,   "pip_value_usd":  6.3,  "price_scale": 1, "max_spread_pips": 3.0},
     # Commodity CFDs — Pepperstone MT5 (continuous, no rollover)
-    # Gold: 1 lot = 100 oz. pip = $0.10, pip_value = $10/lot (100oz × $0.10)
-    "XAUUSD": {"epic": "CS.D.CFEGOLD.CFE.IP", "mt5_symbol": "XAUUSD", "currency": "USD", "pip_size": 0.10,   "pip_value_usd": 10.0,  "price_scale": 1},
-    # Oil: 1 lot = 100 barrels. pip = $0.01, pip_value = $1.00/lot (100bbl × $0.01)
-    "SPOTCRUDE": {"epic": "CS.D.OILCRUD.CFE.IP", "mt5_symbol": "SpotCrude", "currency": "USD", "pip_size": 0.01, "pip_value_usd": 1.0, "price_scale": 1},
+    "XAUUSD": {"epic": "CS.D.CFEGOLD.CFE.IP", "mt5_symbol": "XAUUSD", "currency": "USD", "pip_size": 0.10,   "pip_value_usd": 10.0,  "price_scale": 1, "max_spread_pips": 5.0},
+    "SPOTCRUDE": {"epic": "CS.D.OILCRUD.CFE.IP", "mt5_symbol": "SpotCrude", "currency": "USD", "pip_size": 0.01, "pip_value_usd": 1.0, "price_scale": 1, "max_spread_pips": 5.0},
 }
 
 # ── Session window (UTC) ──────────────────────────────────────────────────────
