@@ -44,6 +44,11 @@ PAIRS: dict = {
     "GBPUSD": {"epic": "CS.D.GBPUSD.CFD.IP", "mt5_symbol": "GBPUSD", "currency": "USD", "pip_size": 0.0001, "pip_value_usd": 10.0,  "price_scale": 1},
     "USDCHF": {"epic": "CS.D.USDCHF.CFD.IP", "mt5_symbol": "USDCHF", "currency": "CHF", "pip_size": 0.0001, "pip_value_usd": 12.5,  "price_scale": 1},
     "GBPJPY": {"epic": "CS.D.GBPJPY.CFD.IP", "mt5_symbol": "GBPJPY", "currency": "JPY", "pip_size": 0.01,   "pip_value_usd":  6.3,  "price_scale": 1},
+    # Commodity CFDs — Pepperstone MT5 (continuous, no rollover)
+    # Gold: 1 lot = 100 oz, tick = $0.01, tick_value = $1.00/lot
+    "XAUUSD": {"epic": "CS.D.CFEGOLD.CFE.IP", "mt5_symbol": "XAUUSD", "currency": "USD", "pip_size": 0.01,   "pip_value_usd":  1.0,  "price_scale": 1},
+    # Oil: 1 lot = 100 barrels, tick = $0.001, tick_value = $0.10/lot
+    "SPOTCRUDE": {"epic": "CS.D.OILCRUD.CFE.IP", "mt5_symbol": "SpotCrude", "currency": "USD", "pip_size": 0.01, "pip_value_usd": 1.0, "price_scale": 1},
 }
 
 # ── Session window (UTC) ──────────────────────────────────────────────────────
