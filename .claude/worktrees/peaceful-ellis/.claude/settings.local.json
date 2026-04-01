@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find \"C:\\\\Users\\\\jalbe\\\\OneDrive - Ahrhoff Futtergut SA \\(PTY\\) Ltd\\\\Github\\\\forex-engine\\\\.claude\\\\worktrees\\\\peaceful-ellis\" -type f -name \"*.py\" -o -name \"*.json\" -o -name \"*.md\" -o -name \"*.txt\")",
+      "Bash(python -c \"from strategy.regime_detection import detect_market_regime, MIN_BARS; print\\(''Import OK — MIN_BARS:'', MIN_BARS\\)\")",
+      "Bash(python test_trend.py)",
+      "Bash(python -c \"import engine; print\\(''engine.py OK''\\)\")",
+      "Bash(python test_switcher.py)",
+      "Bash(python test_all.py)",
+      "Bash(python -c \"import backtest; print\\(''backtest.py OK''\\)\")",
+      "Bash(python -c \":*)",
+      "Bash(python -c \"import engine; print\\(''''OK''''\\)\")",
+      "Bash(ls \"C:/Users/jalbe/OneDrive - Ahrhoff Futtergut SA \\(PTY\\) Ltd/Github/forex-engine/\")",
+      "Bash(ls \"C:/Users/jalbe/OneDrive - Ahrhoff Futtergut SA \\(PTY\\) Ltd/Github/forex-engine-BACKUP-V3/\")",
+      "WebSearch",
+      "Bash(tail -40 \"C:\\\\Users\\\\jalbe\\\\OneDrive - Ahrhoff Futtergut SA \\(PTY\\) Ltd\\\\Github\\\\forex-engine\\\\logs\\\\engine.log\")"
+    ]
+  }
+}

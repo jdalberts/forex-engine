@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Forex Engine</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d1117;
+      --surface: #161b22;
+      --border:  #30363d;
+      --text:    #e6edf3;
+      --muted:   #8b949e;
+      --green:   #3fb950;
+      --red:     #f85149;
+      --blue:    #58a6ff;
+      --yellow:  #d29922;
+      --radius:  8px;
+      --font:    'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .page { max-width: 1440px; margin: 0 auto; }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; }
+    .logo span { color: var(--blue); }
+    .header-right { display: flex; align-items: center; gap: 16px; }
+
+    .pill {
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .pill-green  { background: rgba(63,185,80,.15);  color: var(--green);  border: 1px solid rgba(63,185,80,.3); }
+    .pill-muted  { background: rgba(139,148,158,.1); color: var(--muted);  border: 1px solid var(--border); }
+    #last-update { font-size: 12px; color: var(--muted); }
+
+    /* ── Grids ─────────────────────────────────────────────────── */
+    .grid-quotes  { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 14px; }
+    .grid-mid     { display: grid; grid-template-columns: 1fr 1fr 1fr;   gap: 14px; margin-bottom: 14px; }
+    .grid-pos     { display: grid; grid-template-columns: 1fr 1fr;       gap: 14px; margin-bottom: 14px; }
+    .grid-bottom  { display: grid; grid-template-columns: 1fr 1fr;       gap: 14px; }
+
+    /* ── Cards ─────────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+    }
+
+    .card-title {
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.8px;
+      color: var(--muted); margin-bottom: 12px;
+    }
+
+    /* ── Quote cards ────────────────────────────────────────────── */
+    .quote-pair   { font-size: 12px; font-weight: 700; color: var(--blue); margin-bottom: 8px; }
+    .quote-bid    { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .quote-ask    { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--muted); line-height: 1.1; }
+    .quote-label  { font-size: 10px; color: var(--muted); width: 30px; display: inline-block; }
+    .quote-spread { font-size: 11px; color: var(--muted); margin-top: 6px; }
+    .spread-ok    { color: var(--green); }
+    .spread-wide  { color: var(--yellow); }
+
+    /* ── Stat rows ──────────────────────────────────────────────── */
+    .stat-row  { display: flex; flex-direction: column; gap: 10px; }
+    .stat-item { display: flex; justify-content: space-between; align-items: center; }
+    .stat-label { color: var(--muted); font-size: 13px; }
+    .stat-value { font-weight: 600; font-size: 14px; }
+    .val-green { color: var(--green); }
+    .val-red   { color: var(--red); }
+    .val-muted { color: var(--muted); }
+
+    /* ── Position cards ─────────────────────────────────────────── */
+    .no-positions { color: var(--muted); font-size: 13px; padding: 8px 0; }
+    .pos-header   { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .pos-pair     { font-size: 13px; font-weight: 700; color: var(--blue); }
+    .pos-dir      { font-size: 13px; font-weight: 800; }
+    .pos-dir.long  { color: var(--green); }
+    .pos-dir.short { color: var(--red); }
+    .pos-grid  { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .pos-item  { display: flex; flex-direction: column; gap: 2px; }
+    .pos-item-label { font-size: 11px; color: var(--muted); }
+    .pos-item-val   { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .pnl-pos { color: var(--green); }
+    .pnl-neg { color: var(--red); }
+
+    /* ── Chart ──────────────────────────────────────────────────── */
+    .chart-wrap { position: relative; height: 160px; }
+
+    /* ── Tables ─────────────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th {
+      text-align: left; padding: 6px 8px;
+      color: var(--muted); font-weight: 600;
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+    td { padding: 7px 8px; border-bottom: 1px solid rgba(48,54,61,.5); font-variant-numeric: tabular-nums; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+
+    .tag {
+      display: inline-block; padding: 2px 7px;
+      border-radius: 4px; font-size: 10px;
+      font-weight: 700; text-transform: uppercase;
+    }
+    .tag-long      { background: rgba(63,185,80,.15);  color: var(--green); }
+    .tag-short     { background: rgba(248,81,73,.15);  color: var(--red); }
+    .tag-pending   { background: rgba(88,166,255,.1);  color: var(--blue); }
+    .tag-submitted { background: rgba(63,185,80,.1);   color: var(--green); }
+    .tag-blocked   { background: rgba(139,148,158,.1); color: var(--muted); }
+    .tag-open      { background: rgba(210,153,34,.1);  color: var(--yellow); }
+    .tag-closed    { background: rgba(139,148,158,.1); color: var(--muted); }
+    .tag-pair      { background: rgba(88,166,255,.1);  color: var(--blue); font-size: 10px; }
+
+    .empty-row { color: var(--muted); font-style: italic; padding: 12px 8px; }
+
+    @media (max-width: 1100px) { .grid-quotes { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 800px)  {
+      .grid-quotes { grid-template-columns: 1fr 1fr; }
+      .grid-mid    { grid-template-columns: 1fr; }
+      .grid-pos    { grid-template-columns: 1fr; }
+      .grid-bottom { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <div class="logo">Forex<span>Engine</span></div>
+    <div class="header-right">
+      <span id="session-pill" class="pill pill-muted">–</span>
+      <span id="last-update">–</span>
+    </div>
+  </header>
+
+  <!-- Row 1: 4 live quote cards -->
+  <div class="grid-quotes" id="quotes-grid">
+    <!-- filled by JS -->
+  </div>
+
+  <!-- Row 2: Session & Risk | Equity | Equity curve -->
+  <div class="grid-mid">
+
+    <div class="card">
+      <div class="card-title">Session &amp; Risk</div>
+      <div class="stat-row">
+        <div class="stat-item">
+          <span class="stat-label">Session window</span>
+          <span class="stat-value val-muted">14:00–18:00 SAST</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Session status</span>
+          <span class="stat-value" id="session-text">–</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Risk per trade</span>
+          <span class="stat-value val-muted">0.5 %</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Drawdown</span>
+          <span class="stat-value" id="drawdown">–</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Pairs active</span>
+          <span class="stat-value val-muted">4</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Equity</div>
+      <div class="stat-row">
+        <div class="stat-item">
+          <span class="stat-label">Starting balance</span>
+          <span class="stat-value val-muted">$20,000.00</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Current balance</span>
+          <span class="stat-value" id="balance">–</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Open PnL (all pairs)</span>
+          <span class="stat-value" id="open-pnl">–</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Total trades</span>
+          <span class="stat-value val-muted" id="total-trades">–</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Equity Curve</div>
+      <div class="chart-wrap">
+        <canvas id="equity-chart"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Row 3: Open positions -->
+  <div class="card" style="margin-bottom:14px">
+    <div class="card-title">Open Positions</div>
+    <div id="positions-grid" class="grid-pos">
+      <div class="no-positions">No open positions</div>
+    </div>
+  </div>
+
+  <!-- Row 4: Signals | Trades -->
+  <div class="grid-bottom">
+
+    <div class="card">
+      <div class="card-title">Recent Signals</div>
+      <table>
+        <thead>
+          <tr><th>Time</th><th>Pair</th><th>Dir</th><th>Entry</th><th>Stop</th><th>Target</th><th>Status</th></tr>
+        </thead>
+        <tbody id="signals-body">
+          <tr><td colspan="7" class="empty-row">No signals yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Recent Trades</div>
+      <table>
+        <thead>
+          <tr><th>Opened</th><th>Pair</th><th>Dir</th><th>Size</th><th>Entry</th><th>PnL</th><th>Status</th></tr>
+        </thead>
+        <tbody id="trades-body">
+          <tr><td colspan="7" class="empty-row">No trades yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+  // ── Chart ────────────────────────────────────────────────────────
+  const ctx = document.getElementById('equity-chart').getContext('2d');
+  const equityChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: [], datasets: [{ data: [], borderColor: '#58a6ff',
+      backgroundColor: 'rgba(88,166,255,0.06)', borderWidth: 2,
+      pointRadius: 0, tension: 0.3, fill: true }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: c => '$' + c.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2}) }
+      }},
+      scales: {
+        x: { display: false },
+        y: { grid: { color: 'rgba(48,54,61,0.6)' },
+             ticks: { color: '#8b949e', callback: v => '$' + v.toLocaleString() } }
+      }
+    }
+  });
+
+  // ── Helpers ──────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+  const fmt5 = n => parseFloat(n).toFixed(5);
+  const fmt3 = n => parseFloat(n).toFixed(3);   // JPY pairs need fewer decimals
+  const fmtPrice = (n, pair) => pair && pair.includes('JPY') ? fmt3(n) : fmt5(n);
+  const fmtMoney = n => '$' + parseFloat(n).toLocaleString('en-US', {minimumFractionDigits: 2});
+  function shortTime(iso) { return iso ? iso.replace('T', ' ').slice(0, 16) : '–'; }
+  function tag(cls, text) { return `<span class="tag tag-${cls}">${text}</span>`; }
+  function statusTag(s) {
+    const map = { pending: ['pending','pending'], submitted: ['submitted','submitted'],
+      blocked_drawdown: ['blocked','blocked'], blocked_position: ['blocked','blocked'],
+      order_failed: ['blocked','failed'] };
+    const [c, l] = map[s] || ['muted', s];
+    return tag(c, l);
+  }
+
+  const PAIRS = ['EURUSD', 'GBPUSD', 'USDCHF', 'GBPJPY'];
+  const START = 20000;
+
+  // ── Build quote cards once ───────────────────────────────────────
+  const quotesGrid = $('quotes-grid');
+  PAIRS.forEach(sym => {
+    const label = sym.slice(0,3) + ' / ' + sym.slice(3);
+    quotesGrid.innerHTML += `
+      <div class="card" id="qcard-${sym}">
+        <div class="quote-pair">${label}</div>
+        <div><span class="quote-label">BID</span><span class="quote-bid" id="bid-${sym}">–</span></div>
+        <div style="margin-top:3px"><span class="quote-label">ASK</span><span class="quote-ask" id="ask-${sym}">–</span></div>
+        <div class="quote-spread" id="spread-${sym}">Spread: –</div>
+      </div>`;
+  });
+
+  // ── Main refresh ─────────────────────────────────────────────────
+  async function refresh() {
+    let data;
+    try {
+      const res = await fetch('/api/state');
+      if (!res.ok) return;
+      data = await res.json();
+    } catch { return; }
+
+    const pairs = data.pairs || {};
+
+    // ── Quotes ───────────────────────────────────────────────────
+    let totalPnl = 0, hasPnl = false;
+    PAIRS.forEach(sym => {
+      const ps = pairs[sym];
+      if (!ps || !ps.quote) return;
+      const bid = parseFloat(ps.quote.bid);
+      const ask = parseFloat(ps.quote.ask);
+      $(`bid-${sym}`).textContent = fmtPrice(bid, sym);
+      $(`ask-${sym}`).textContent = fmtPrice(ask, sym);
+      const sp = ps.spread_pips;
+      const spEl = $(`spread-${sym}`);
+      if (sp !== null && sp !== undefined) {
+        spEl.textContent = `Spread: ${sp} pips`;
+        spEl.className = 'quote-spread ' + (sp <= 2 ? 'spread-ok' : 'spread-wide');
+      }
+      if (ps.live_pnl !== null && ps.live_pnl !== undefined) {
+        totalPnl += parseFloat(ps.live_pnl);
+        hasPnl = true;
+      }
+    });
+
+    // ── Session ──────────────────────────────────────────────────
+    const now = new Date();
+    const utcMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const sessionOpen = utcMins >= 720 && utcMins < 960;
+    const pill = $('session-pill'), sessText = $('session-text');
+    if (sessionOpen) {
+      pill.className = 'pill pill-green'; pill.textContent = '● LIVE';
+      sessText.textContent = 'Open'; sessText.className = 'stat-value val-green';
+    } else {
+      pill.className = 'pill pill-muted'; pill.textContent = '○ CLOSED';
+      sessText.textContent = 'Closed'; sessText.className = 'stat-value val-muted';
+    }
+
+    // ── Equity ───────────────────────────────────────────────────
+    const eq = data.equity;
+    if (eq && eq.length > 0) {
+      const latest = parseFloat(eq[eq.length - 1].balance);
+      const dd = ((START - latest) / START * 100).toFixed(2);
+      const ddEl = $('drawdown');
+      ddEl.textContent = dd + '%';
+      ddEl.className = parseFloat(dd) > 0 ? 'stat-value val-red' : 'stat-value val-green';
+      const balEl = $('balance');
+      balEl.textContent = fmtMoney(latest);
+      balEl.className = latest >= START ? 'stat-value val-green' : 'stat-value val-red';
+    } else {
+      $('drawdown').textContent = '0.00%'; $('drawdown').className = 'stat-value val-green';
+      $('balance').textContent = '$20,000.00'; $('balance').className = 'stat-value val-muted';
+    }
+
+    // Open PnL across all pairs
+    const pnlEl = $('open-pnl');
+    if (hasPnl) {
+      pnlEl.textContent = (totalPnl >= 0 ? '+' : '') + fmtMoney(totalPnl);
+      pnlEl.className = totalPnl >= 0 ? 'stat-value val-green' : 'stat-value val-red';
+    } else {
+      pnlEl.textContent = '–'; pnlEl.className = 'stat-value val-muted';
+    }
+    $('total-trades').textContent = (data.trades || []).length;
+
+    // ── Positions ────────────────────────────────────────────────
+    const posGrid = $('positions-grid');
+    const openPairs = PAIRS.filter(sym => pairs[sym] && pairs[sym].position);
+    if (openPairs.length === 0) {
+      posGrid.innerHTML = '<div class="no-positions">No open positions</div>';
+    } else {
+      posGrid.innerHTML = openPairs.map(sym => {
+        const ps = pairs[sym]; const p = ps.position;
+        const dir = p.direction;
+        const pnl = ps.live_pnl;
+        const pnlStr = pnl !== null
+          ? `<span class="${parseFloat(pnl) >= 0 ? 'pnl-pos' : 'pnl-neg'}">${(parseFloat(pnl) >= 0 ? '+' : '') + fmtMoney(pnl)}</span>`
+          : '–';
+        return `
+          <div class="card" style="padding:14px 16px">
+            <div class="pos-header">
+              <span class="pos-pair">${sym.slice(0,3)}/${sym.slice(3)}</span>
+              <span class="pos-dir ${dir}">${dir.toUpperCase()}</span>
+            </div>
+            <div class="pos-grid">
+              <div class="pos-item"><span class="pos-item-label">Entry</span><span class="pos-item-val">${fmtPrice(p.entry_price, sym)}</span></div>
+              <div class="pos-item"><span class="pos-item-label">Size</span><span class="pos-item-val">${p.size}</span></div>
+              <div class="pos-item"><span class="pos-item-label">Stop</span><span class="pos-item-val" style="color:var(--red)">${fmtPrice(p.stop_level, sym)}</span></div>
+              <div class="pos-item"><span class="pos-item-label">Target</span><span class="pos-item-val" style="color:var(--green)">${fmtPrice(p.limit_level, sym)}</span></div>
+              <div class="pos-item"><span class="pos-item-label">Open PnL</span><span class="pos-item-val">${pnlStr}</span></div>
+              <div class="pos-item"><span class="pos-item-label">Opened</span><span class="pos-item-val" style="font-size:11px;color:var(--muted)">${shortTime(p.opened_at)}</span></div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    // ── Equity chart ─────────────────────────────────────────────
+    if (eq && eq.length > 0) {
+      equityChart.data.labels = eq.map(e => shortTime(e.recorded_at));
+      equityChart.data.datasets[0].data = eq.map(e => parseFloat(e.balance));
+      const last = parseFloat(eq[eq.length - 1].balance);
+      equityChart.data.datasets[0].borderColor = last >= START ? '#3fb950' : '#f85149';
+      equityChart.update('none');
+    }
+
+    // ── Signals table ────────────────────────────────────────────
+    const sigBody = $('signals-body');
+    if (data.signals && data.signals.length > 0) {
+      sigBody.innerHTML = data.signals.map(s => `
+        <tr>
+          <td style="color:var(--muted)">${shortTime(s.generated_at)}</td>
+          <td>${tag('pair', s.symbol || 'EURUSD')}</td>
+          <td>${tag(s.direction, s.direction.toUpperCase())}</td>
+          <td>${fmtPrice(s.entry, s.symbol)}</td>
+          <td style="color:var(--red)">${fmtPrice(s.stop, s.symbol)}</td>
+          <td style="color:var(--green)">${fmtPrice(s.target, s.symbol)}</td>
+          <td>${statusTag(s.status)}</td>
+        </tr>`).join('');
+    } else {
+      sigBody.innerHTML = '<tr><td colspan="7" class="empty-row">No signals yet</td></tr>';
+    }
+
+    // ── Trades table ─────────────────────────────────────────────
+    const trBody = $('trades-body');
+    if (data.trades && data.trades.length > 0) {
+      trBody.innerHTML = data.trades.map(t => {
+        const pnl = t.pnl;
+        const pnlStr = pnl !== null
+          ? `<span class="${parseFloat(pnl) >= 0 ? 'pnl-pos' : 'pnl-neg'}">${(parseFloat(pnl) >= 0 ? '+' : '') + fmtMoney(pnl)}</span>`
+          : '–';
+        return `
+          <tr>
+            <td style="color:var(--muted)">${shortTime(t.opened_at)}</td>
+            <td>${tag('pair', t.symbol || 'EURUSD')}</td>
+            <td>${tag(t.direction, t.direction.toUpperCase())}</td>
+            <td>${t.size}</td>
+            <td>${fmtPrice(t.entry_price, t.symbol)}</td>
+            <td>${pnlStr}</td>
+            <td>${tag(t.status, t.status)}</td>
+          </tr>`;
+      }).join('');
+    } else {
+      trBody.innerHTML = '<tr><td colspan="7" class="empty-row">No trades yet</td></tr>';
+    }
+
+    $('last-update').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  }
+
+  refresh();
+  setInterval(refresh, 5000);
+</script>
+</body>
+</html>

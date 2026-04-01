@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python backtest.py --mt5 --bars 50000)",
+      "Bash(python -c \":*)",
+      "Bash(python optimize.py --quick --symbol USDCHF --bars 10000 --top 10)",
+      "Bash(cd /c/Users/jalbe/OneDrive - Ahrhoff Futtergut SA \\\\\\(PTY\\\\\\) Ltd/Desktop/forex-engine)"
+    ]
+  }
+}
