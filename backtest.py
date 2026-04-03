@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import logging
 import math
+import numpy as np
 from datetime import datetime
 from typing import Optional
 
@@ -400,7 +401,8 @@ def compute_stats(result: dict) -> dict:
     if not trades:
         return {"total_trades": 0, "wins": 0, "losses": 0, "win_rate": 0,
                 "total_return_pct": 0, "max_drawdown_pct": 0,
-                "profit_factor": 0, "final_balance": round(final, 2)}
+                "profit_factor": 0, "sharpe_ratio": 0.0,
+                "final_balance": round(final, 2)}
 
     wins   = [t for t in trades if t["result"] == "win"]
     losses = [t for t in trades if t["result"] == "stop"]
@@ -417,6 +419,18 @@ def compute_stats(result: dict) -> dict:
     gross_loss   = abs(sum(t["pnl"] for t in trades if t["pnl"] < 0))
     profit_factor = round(gross_profit / gross_loss, 2) if gross_loss > 0 else float("inf")
 
+    # Annualised Sharpe ratio from per-trade returns
+    # Uses percentage return per trade relative to account balance at entry
+    trade_returns = np.array([t["pnl"] / initial for t in trades])
+    if len(trade_returns) >= 2 and np.std(trade_returns) > 0:
+        # Annualise assuming ~250 trades/year (approximate for hourly forex)
+        trades_per_year = 250
+        sharpe_ratio = round(
+            (np.mean(trade_returns) / np.std(trade_returns)) * math.sqrt(trades_per_year), 2
+        )
+    else:
+        sharpe_ratio = 0.0
+
     return {
         "total_trades":    len(trades),
         "wins":            len(wins),
@@ -425,6 +439,7 @@ def compute_stats(result: dict) -> dict:
         "total_return_pct": round((final - initial) / initial * 100, 2),
         "max_drawdown_pct": round(max_dd, 2),
         "profit_factor":   profit_factor,
+        "sharpe_ratio":    sharpe_ratio,
         "final_balance":   round(final, 2),
     }
 
@@ -458,6 +473,7 @@ def print_report(symbol: str, bars_count: int, date_from: str, date_to: str,
     print(f"  {'Total return':<22} {fmt(b['total_return_pct'], ' %'):>16} {fmt(h['total_return_pct'], ' %'):>16}")
     print(f"  {'Max drawdown':<22} {fmt(b['max_drawdown_pct'], ' %'):>16} {fmt(h['max_drawdown_pct'], ' %'):>16}")
     print(f"  {'Profit factor':<22} {fmt(b['profit_factor']):>16} {fmt(h['profit_factor']):>16}")
+    print(f"  {'Sharpe ratio':<22} {fmt(b['sharpe_ratio']):>16} {fmt(h['sharpe_ratio']):>16}")
     print(f"  {'Final balance':<22} ${b['final_balance']:>14,.2f} ${h['final_balance']:>14,.2f}")
     print(f"  {'-' * 56}")
     print(f"  Hybrid vs baseline:  return {sign}{ret_diff} %   drawdown {dd_sign}{dd_diff} %")

@@ -97,10 +97,10 @@ check our DB, we might try to close an already-closed position, causing an API e
 - [ ] Add filter summary per pair ("USDCHF: Blocked — High Vol + News")
 - [ ] Add soft/hard drawdown limit lines to equity curve chart
 - [ ] Add trade entry/exit markers on equity curve
-- [ ] Add Sharpe ratio to backtest stats
+- [x] Add Sharpe ratio to backtest stats
 - [ ] WebSocket for real-time updates (replace 5s polling)
 - [ ] Create `.env.example` template
-- [ ] Remove orphaned test files: test_regime.py, test_switcher.py, test_trend.py
+- [x] Remove orphaned test files: test_regime.py, test_switcher.py, test_trend.py
 - [ ] News filter: fix DST transition calculation
 
 ### Phase 5 — Live Account Migration
