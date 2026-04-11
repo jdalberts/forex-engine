@@ -553,7 +553,11 @@ def run(dry_run: bool = True) -> None:
         if (not in_session
                 and now.time() >= config.SESSION_END_UTC
                 and now.strftime("%Y-%m-%d") != _last_report_date):
-            _report = build_daily_report(config.DB_PATH, equity_guard.current_balance)
+            _report = build_daily_report(
+                config.DB_PATH,
+                equity_guard.current_balance,
+                peak_balance=equity_guard.peak_balance,
+            )
             send_alert(_report)
             log.info("Daily report sent for %s", now.strftime("%Y-%m-%d"))
             _last_report_date = now.strftime("%Y-%m-%d")
