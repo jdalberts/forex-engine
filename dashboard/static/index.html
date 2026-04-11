@@ -394,7 +394,6 @@
   }
 
   const PAIRS = ['EURUSD', 'GBPUSD', 'USDCHF', 'GBPJPY'];
-  const START = 20000;
 
   // ── Build quote cards once ────────────────────────────────────────────────
   PAIRS.forEach(sym => {
@@ -512,19 +511,23 @@
     sessText.className = sessionOpen ? 'stat-value val-green' : 'stat-value val-muted';
 
     // ── Equity ────────────────────────────────────────────────────────────
+    // Drawdown is measured against the high-water mark of the equity curve,
+    // NOT a hardcoded starting balance. This way adding/removing demo capital
+    // (or migrating accounts) never produces a phantom drawdown.
     const eq = data.equity;
     if (eq && eq.length > 0) {
       const latest = parseFloat(eq[eq.length - 1].balance);
-      const dd = ((START - latest) / START * 100).toFixed(2);
+      const peak   = eq.reduce((m, r) => Math.max(m, parseFloat(r.balance)), latest);
+      const dd     = peak > 0 ? ((peak - latest) / peak * 100) : 0;
       const ddEl = $('drawdown');
-      ddEl.textContent = dd + '%';
-      ddEl.className = parseFloat(dd) > 0 ? 'stat-value val-red' : 'stat-value val-green';
+      ddEl.textContent = dd.toFixed(2) + '%';
+      ddEl.className = dd > 0 ? 'stat-value val-red' : 'stat-value val-green';
       const balEl = $('balance');
       balEl.textContent = fmtMoney(latest);
-      balEl.className = latest >= START ? 'stat-value val-green' : 'stat-value val-red';
+      balEl.className = latest >= peak ? 'stat-value val-green' : 'stat-value val-red';
     } else {
       $('drawdown').textContent = '0.00%'; $('drawdown').className = 'stat-value val-green';
-      $('balance').textContent = '$20,000.00'; $('balance').className = 'stat-value val-muted';
+      $('balance').textContent = '–'; $('balance').className = 'stat-value val-muted';
     }
 
     const pnlEl = $('open-pnl');
@@ -603,9 +606,12 @@
     if (eq && eq.length > 0) {
       equityChart.data.labels = eq.map(e => shortTime(e.recorded_at));
       equityChart.data.datasets[0].data = eq.map(e => parseFloat(e.balance));
-      const last = parseFloat(eq[eq.length - 1].balance);
-      equityChart.data.datasets[0].borderColor = last >= START ? '#3fb950' : '#f85149';
-      equityChart.data.datasets[0].backgroundColor = last >= START
+      // Colour the line green if we're at/above the first recorded balance,
+      // red if below. Uses the curve itself instead of a hardcoded baseline.
+      const first = parseFloat(eq[0].balance);
+      const last  = parseFloat(eq[eq.length - 1].balance);
+      equityChart.data.datasets[0].borderColor = last >= first ? '#3fb950' : '#f85149';
+      equityChart.data.datasets[0].backgroundColor = last >= first
         ? 'rgba(63,185,80,0.06)' : 'rgba(248,81,73,0.06)';
       equityChart.update('none');
     }
