@@ -24,7 +24,7 @@ from typing import Optional
 import pandas as pd
 
 from core import config
-from strategy.indicators import atr as _atr_shared, rsi as _rsi_shared, bollinger_bands as _bb_shared  # [NEW — Step 9 / Step 18]
+from strategy.indicators import atr as _atr_shared, rsi as _rsi_shared, bollinger_bands as _bb_shared, mfi as _mfi_shared
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +37,10 @@ RSI_OVERSOLD    = config.MR_RSI_OVERSOLD
 RSI_OVERBOUGHT  = config.MR_RSI_OVERBOUGHT
 STOP_ATR_MULT   = config.MR_STOP_ATR_MULT
 TARGET_ATR_MULT = config.MR_TARGET_ATR_MULT  # 2 : 1 R
+MFI_ENABLED     = config.MR_MFI_ENABLED
+MFI_PERIOD      = config.MR_MFI_PERIOD
+MFI_OVERSOLD    = config.MR_MFI_OVERSOLD
+MFI_OVERBOUGHT  = config.MR_MFI_OVERBOUGHT
 MIN_BARS        = RSI_PERIOD + BB_PERIOD + 5  # [Step 18] was VWAP_WINDOW (same value: 39)
 
 
@@ -77,6 +81,8 @@ def generate(bars: list[dict]) -> Optional[dict]:
     df["rsi"]  = _rsi(df["close"])
     df["bb_upper"], df["bb_mid"], df["bb_lower"] = _bb(df)   # [Step 18] replaced VWAP
     df["atr"]  = _atr(df)
+    if MFI_ENABLED:
+        df["mfi"] = _mfi_shared(df, period=MFI_PERIOD)
 
     last     = df.iloc[-1]
     rsi      = float(last["rsi"])
@@ -84,6 +90,7 @@ def generate(bars: list[dict]) -> Optional[dict]:
     bb_lower = float(last["bb_lower"])
     close    = float(last["close"])
     atr      = float(last["atr"])
+    mfi_val  = float(last["mfi"]) if MFI_ENABLED and "mfi" in df.columns else None
 
     if pd.isna(atr) or atr <= 0 or pd.isna(bb_upper) or pd.isna(bb_lower):
         log.debug("Indicators not ready (ATR or BB)")
@@ -100,6 +107,18 @@ def generate(bars: list[dict]) -> Optional[dict]:
         direction = "short"
         reason    = (f"RSI {rsi:.1f} > {RSI_OVERBOUGHT} | "
                      f"close {close:.5f} >= BB_upper {bb_upper:.5f}")
+
+    # ── MFI volume confirmation ──────────────────────────────────────────────
+    if direction is not None and MFI_ENABLED and mfi_val is not None and not pd.isna(mfi_val):
+        if direction == "long" and mfi_val > MFI_OVERSOLD:
+            log.info("MR signal blocked — MFI %.1f > %.1f (volume doesn't confirm oversold)",
+                     mfi_val, MFI_OVERSOLD)
+            return None
+        if direction == "short" and mfi_val < MFI_OVERBOUGHT:
+            log.info("MR signal blocked — MFI %.1f < %.1f (volume doesn't confirm overbought)",
+                     mfi_val, MFI_OVERBOUGHT)
+            return None
+        reason += f" | MFI {mfi_val:.1f}"
 
     if direction is None:
         return None
