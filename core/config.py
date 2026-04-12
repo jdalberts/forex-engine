@@ -114,12 +114,25 @@ MR_RSI_OVERBOUGHT: float = 70.0  # RSI above this → short signal candidate [op
 MR_STOP_ATR_MULT: float  = 1.5   # stop distance = this × ATR              [optim2: was 2.0 → 1.5 tighter MR stops]
 MR_TARGET_ATR_MULT: float = 5.0  # target distance = this × ATR  (3.3:1 R/R)
 
+# ── Volume confirmation: Mean Reversion ───────────────────────────────────────
+MR_MFI_ENABLED: bool      = True   # require MFI (volume-weighted RSI) to agree with RSI
+MR_MFI_PERIOD: int        = 14     # MFI lookback period (standard: same as RSI)
+MR_MFI_OVERSOLD: float    = 20.0   # MFI below this confirms oversold (long)
+MR_MFI_OVERBOUGHT: float  = 80.0   # MFI above this confirms overbought (short)
+
 # ── Strategy: Trend Following ──────────────────────────────────────────────────
 TF_FAST_EMA_PERIOD: int  = 20    # fast EMA period for crossover
 TF_SLOW_EMA_PERIOD: int  = 50    # slow EMA period for crossover
 TF_ATR_PERIOD: int       = 14    # ATR lookback period
 TF_STOP_ATR_MULT: float  = 3.0   # stop distance = this × ATR                [optim2: was 2.5 → 3.0 wider trend stops]
 TF_TARGET_ATR_MULT: float = 8.0  # target distance = this × ATR  (2.7:1 R/R) [optim2: was 6.0 → 8.0 let big trends run]
+
+# ── Volume confirmation: Trend Following ──────────────────────────────────────
+TF_VOL_ENABLED: bool       = True  # require volume confirmation on EMA crossovers
+TF_VOL_RATIO_PERIOD: int   = 20   # rolling window for average volume baseline
+TF_VOL_RATIO_MIN: float    = 1.5  # volume must be this × average to confirm crossover
+TF_OBV_ENABLED: bool       = True  # require OBV trend to agree with crossover direction
+TF_OBV_LOOKBACK: int       = 5    # compare OBV now vs N bars ago for trend direction
 
 # ── Strategy: Regime Detection ─────────────────────────────────────────────────
 REGIME_ADX_PERIOD: int       = 14   # ADX / DI smoothing period

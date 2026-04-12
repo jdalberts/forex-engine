@@ -159,3 +159,72 @@ def macd(
     signal_line = macd_line.ewm(span=signal, adjust=False).mean()
     histogram = macd_line - signal_line
     return macd_line, signal_line, histogram
+
+
+# ── Volume indicators ─────────────────────────────────────────────────────────
+
+def mfi(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    """
+    Money Flow Index — volume-weighted RSI (0-100 scale).
+
+    MFI < 20 → oversold with volume confirmation.
+    MFI > 80 → overbought with volume confirmation.
+    More reliable than RSI alone because it requires volume to agree.
+
+    Parameters
+    ----------
+    df     : DataFrame with columns high, low, close, volume
+    period : lookback window (standard: 14)
+
+    Returns
+    -------
+    pd.Series of MFI values.  NaN where not yet warmed up.
+    """
+    typical_price = (df["high"] + df["low"] + df["close"]) / 3
+    raw_mf = typical_price * df["volume"]
+
+    direction = typical_price.diff()
+    pos_mf = raw_mf.where(direction > 0, 0.0).rolling(period).sum()
+    neg_mf = raw_mf.where(direction <= 0, 0.0).rolling(period).sum()
+
+    mf_ratio = pos_mf / neg_mf.replace(0, np.nan)
+    return 100 - 100 / (1 + mf_ratio)
+
+
+def obv(df: pd.DataFrame) -> pd.Series:
+    """
+    On-Balance Volume — cumulative volume flow.
+
+    OBV rises when volume on up-bars exceeds volume on down-bars.
+    Divergence between OBV and price signals a trend losing momentum.
+
+    Parameters
+    ----------
+    df : DataFrame with columns close, volume
+
+    Returns
+    -------
+    pd.Series of cumulative OBV values.
+    """
+    direction = np.sign(df["close"].diff())
+    return (direction * df["volume"]).fillna(0).cumsum()
+
+
+def volume_ratio(df: pd.DataFrame, period: int = 20) -> pd.Series:
+    """
+    Volume ratio — current bar volume / rolling average volume.
+
+    ratio > 1.5 → volume spike (momentum move is serious).
+    ratio < 0.5 → quiet market (breakout/crossover less reliable).
+
+    Parameters
+    ----------
+    df     : DataFrame with column volume
+    period : rolling average window (standard: 20)
+
+    Returns
+    -------
+    pd.Series of volume ratios.  NaN during warmup.
+    """
+    avg_vol = df["volume"].rolling(period).mean()
+    return df["volume"] / avg_vol.replace(0, np.nan)

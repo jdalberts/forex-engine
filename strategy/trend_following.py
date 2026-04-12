@@ -30,7 +30,7 @@ from typing import Optional
 import pandas as pd
 
 from core import config
-from strategy.indicators import atr as _atr_shared, adx_full  # [NEW — Step 9]
+from strategy.indicators import atr as _atr_shared, adx_full, volume_ratio as _vol_ratio_shared, obv as _obv_shared
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +40,11 @@ SLOW_EMA_PERIOD  = config.TF_SLOW_EMA_PERIOD   # slow EMA lookback
 ATR_PERIOD       = config.TF_ATR_PERIOD         # ATR lookback
 STOP_ATR_MULT    = config.TF_STOP_ATR_MULT      # stop distance in ATR units
 TARGET_ATR_MULT  = config.TF_TARGET_ATR_MULT    # target distance in ATR units (2:1 R)
+VOL_ENABLED      = config.TF_VOL_ENABLED         # volume spike confirmation
+VOL_RATIO_PERIOD = config.TF_VOL_RATIO_PERIOD    # rolling avg volume window
+VOL_RATIO_MIN    = config.TF_VOL_RATIO_MIN       # min volume ratio to confirm
+OBV_ENABLED      = config.TF_OBV_ENABLED         # OBV trend confirmation
+OBV_LOOKBACK     = config.TF_OBV_LOOKBACK         # bars to compare OBV trend
 MIN_BARS         = SLOW_EMA_PERIOD + ATR_PERIOD + 5  # minimum bars needed
 
 
@@ -84,6 +89,10 @@ def trend_following_signal(bars: list[dict]) -> Optional[dict]:
     df["fast_ema"] = _ema(df["close"], FAST_EMA_PERIOD)
     df["slow_ema"] = _ema(df["close"], SLOW_EMA_PERIOD)
     df["atr"]      = _atr(df)
+    if VOL_ENABLED:
+        df["vol_ratio"] = _vol_ratio_shared(df, period=VOL_RATIO_PERIOD)
+    if OBV_ENABLED:
+        df["obv"] = _obv_shared(df)
 
     # ADX direction indicators for trend confirmation
     plus_di, minus_di, _ = adx_full(df)
@@ -137,6 +146,28 @@ def trend_following_signal(bars: list[dict]) -> Optional[dict]:
         if direction == "short" and mdi <= pdi:
             log.info("[trend] Bearish cross blocked — +DI (%.1f) > -DI (%.1f)", pdi, mdi)
             return None
+
+    # ── Volume spike confirmation ────────────────────────────────────────────
+    if VOL_ENABLED:
+        vr = float(df["vol_ratio"].iloc[-1]) if not pd.isna(df["vol_ratio"].iloc[-1]) else 0
+        if vr < VOL_RATIO_MIN:
+            log.info("[trend] %s cross blocked — vol ratio %.2f < %.1f (low volume crossover)",
+                     direction.upper(), vr, VOL_RATIO_MIN)
+            return None
+        reason += f" | vol_ratio {vr:.2f}"
+
+    # ── OBV trend confirmation ───────────────────────────────────────────────
+    if OBV_ENABLED and len(df) > OBV_LOOKBACK:
+        obv_now  = float(df["obv"].iloc[-1])
+        obv_prev = float(df["obv"].iloc[-1 - OBV_LOOKBACK])
+        obv_rising = obv_now > obv_prev
+        if direction == "long" and not obv_rising:
+            log.info("[trend] Bullish cross blocked — OBV declining (smart money not buying)")
+            return None
+        if direction == "short" and obv_rising:
+            log.info("[trend] Bearish cross blocked — OBV rising (smart money not selling)")
+            return None
+        reason += f" | OBV {'up' if obv_rising else 'down'}"
 
     # ── Stop and target (ATR-based, same as mean_reversion) ───────────────────
     entry = close
