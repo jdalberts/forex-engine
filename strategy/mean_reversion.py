@@ -37,6 +37,7 @@ RSI_OVERSOLD    = config.MR_RSI_OVERSOLD
 RSI_OVERBOUGHT  = config.MR_RSI_OVERBOUGHT
 STOP_ATR_MULT   = config.MR_STOP_ATR_MULT
 TARGET_ATR_MULT = config.MR_TARGET_ATR_MULT  # 2 : 1 R
+BB_NEAR_TOUCH_ATR = getattr(config, "MR_BB_NEAR_TOUCH_ATR", 0.15)  # allow close within N*ATR of band
 MIN_BARS        = RSI_PERIOD + BB_PERIOD + 5  # [Step 18] was VWAP_WINDOW (same value: 39)
 
 
@@ -92,14 +93,15 @@ def generate(bars: list[dict]) -> Optional[dict]:
     direction: Optional[str] = None
     reason:    Optional[str] = None
 
-    if rsi < RSI_OVERSOLD and close <= bb_lower:
+    near_buffer = BB_NEAR_TOUCH_ATR * atr
+    if rsi < RSI_OVERSOLD and close <= bb_lower + near_buffer:
         direction = "long"
         reason    = (f"RSI {rsi:.1f} < {RSI_OVERSOLD} | "
-                     f"close {close:.5f} <= BB_lower {bb_lower:.5f}")
-    elif rsi > RSI_OVERBOUGHT and close >= bb_upper:
+                     f"close {close:.5f} <= BB_lower {bb_lower:.5f} + {near_buffer:.5f}")
+    elif rsi > RSI_OVERBOUGHT and close >= bb_upper - near_buffer:
         direction = "short"
         reason    = (f"RSI {rsi:.1f} > {RSI_OVERBOUGHT} | "
-                     f"close {close:.5f} >= BB_upper {bb_upper:.5f}")
+                     f"close {close:.5f} >= BB_upper {bb_upper:.5f} - {near_buffer:.5f}")
 
     if direction is None:
         return None

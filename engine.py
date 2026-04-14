@@ -48,6 +48,9 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
+# Keep strategy modules at DEBUG so autopilot can diagnose why signals return None
+for _strategy_mod in ("strategy.mean_reversion", "strategy.trend_following"):
+    logging.getLogger(_strategy_mod).setLevel(logging.DEBUG)
 # [NEW — Step 9] File logging with rotation — survives background/service runs
 pathlib.Path(config.LOG_FILE).parent.mkdir(parents=True, exist_ok=True)
 _fh = RotatingFileHandler(config.LOG_FILE,

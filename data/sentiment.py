@@ -37,7 +37,7 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 SENTIMENT_REFRESH_SEC = 900  # 15 minutes
 
 # Sentiment thresholds — block trades when confidence exceeds this
-BLOCK_THRESHOLD = 0.5  # sentiment score magnitude must exceed this to block
+BLOCK_THRESHOLD = 0.75  # sentiment must be high-confidence to override a technical signal
 
 # Currency mapping: which Finnhub categories affect which pairs
 CURRENCY_KEYWORDS = {

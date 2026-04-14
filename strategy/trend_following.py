@@ -40,6 +40,7 @@ SLOW_EMA_PERIOD  = config.TF_SLOW_EMA_PERIOD   # slow EMA lookback
 ATR_PERIOD       = config.TF_ATR_PERIOD         # ATR lookback
 STOP_ATR_MULT    = config.TF_STOP_ATR_MULT      # stop distance in ATR units
 TARGET_ATR_MULT  = config.TF_TARGET_ATR_MULT    # target distance in ATR units (2:1 R)
+PULLBACK_ATR_DIST = getattr(config, "TF_PULLBACK_ATR_DIST", 0.3)  # pullback re-entry tolerance (ATR units)
 MIN_BARS         = SLOW_EMA_PERIOD + ATR_PERIOD + 5  # minimum bars needed
 
 
@@ -123,6 +124,30 @@ def trend_following_signal(bars: list[dict]) -> Optional[dict]:
             f"EMA cross DOWN: fast({FAST_EMA_PERIOD})={fast_now:.5f} "
             f"< slow({SLOW_EMA_PERIOD})={slow_now:.5f}"
         )
+
+    # Fallback: pullback re-entry during an established trend.
+    # Fires when EMAs stay aligned and price has retraced to the fast EMA
+    # without breaking through — catches continuations that the crossover misses.
+    if direction is None:
+        pullback_buffer = PULLBACK_ATR_DIST * atr
+        if (fast_now > slow_now
+                and close >= fast_now
+                and abs(close - fast_now) <= pullback_buffer):
+            direction = "long"
+            reason = (
+                f"Pullback LONG: close {close:.5f} within "
+                f"{pullback_buffer:.5f} of fast EMA {fast_now:.5f} "
+                f"(trend up, fast>slow)"
+            )
+        elif (fast_now < slow_now
+                and close <= fast_now
+                and abs(close - fast_now) <= pullback_buffer):
+            direction = "short"
+            reason = (
+                f"Pullback SHORT: close {close:.5f} within "
+                f"{pullback_buffer:.5f} of fast EMA {fast_now:.5f} "
+                f"(trend down, fast<slow)"
+            )
 
     if direction is None:
         return None
