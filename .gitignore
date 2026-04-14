@@ -7,3 +7,6 @@ data/*.db
 data/cache/
 *.log
 .DS_Store
+
+# Autopilot local file backups — git commits are the real history
+strategy/_backups/*.py
