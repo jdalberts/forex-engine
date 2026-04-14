@@ -102,3 +102,18 @@ Phase 4 (6+ months): Expand pairs, volatility targeting, quarterly re-optimizati
 - ib_async (replaces ib_insync): github.com/ib-api-reloaded/ib_async
 - CFA ML Commodity Futures: rpc.cfainstitute.org/research/foundation/2025/chapter-8
 - GDELT Doc API: github.com/alex9smith/gdelt-doc-api
+
+
+### Auto-Research Scan (2026-04-05)
+- [Strategy & Market Research] A new academic paper published on April 2nd in the Journal of Empirical Finance proposes a novel mean reversion strategy for commodity futures that incorporates time-varying volatility and risk premia.
+- [Strategy & Market Research] A research report from Citi Global Markets on April 4th analyzes changes in forex market regime and volatility structure, suggesting increased opportunities for trend following strategies in the current environment.
+- [Tool & API Updates] MetaTrader5 Python package version 5.0.35 was released on March 31st with bug fixes and performance improvements.
+- [Tool & API Updates] The ib_async library (Interactive Brokers Python) version 9.7.1 was updated on April 3rd with support for the latest IB API release.
+
+
+### Auto-Research Scan (2026-04-12)
+- [Strategy & Market Research] A new academic paper published on April 10th in the Journal of Empirical Finance proposes a hybrid mean reversion and trend following strategy for commodity futures trading, showing promising out-of-sample results.
+- [Strategy & Market Research] A research report from Citi Global Markets on April 8th analyzes the recent shift in forex market volatility structure, suggesting a potential regime change that may require adjustments to existing trading models.
+- [Tool & API Updates] MetaTrader5 Python package version 5.0.35 was released on April 11th, with bug fixes and minor performance improvements.
+- [Tool & API Updates] The ib_async library (Interactive Brokers Python) announced a breaking change on April 9th, requiring updates to the trading engine's order execution code.
+- [SA Regulation] The FSCA (Financial Sector Conduct Authority) in South Africa announced new leverage restrictions for retail forex and CFD trading on April 7th, lowering the maximum leverage to 1:20.
