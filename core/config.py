@@ -78,7 +78,7 @@ SESSION_START_UTC = dtime(12, 0)
 SESSION_END_UTC   = dtime(16, 0)
 
 # ── Risk ──────────────────────────────────────────────────────────────────────
-INITIAL_BALANCE: float   = 20_000.0
+INITIAL_BALANCE: float   = 2_000.0  # Pepperstone MT5 demo baseline; actual balance fetched from broker at startup
 RISK_PER_TRADE: float    = 0.01    # [UPDATED — Step 5] 1 % of account per trade (was 0.5 %)
 SOFT_DRAWDOWN: float     = 0.04    # 4 % → scale risk down to 25 %  [was 0.02 — 2% triggered too easily on normal variance; 4% is standard]
 HARD_DRAWDOWN: float     = 0.08    # 8 % → halt trading entirely    [was 0.04 — 4% halt was very aggressive; 8% is industry standard]
