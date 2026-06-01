@@ -191,3 +191,98 @@ Append-only. Every autonomous run adds an entry. Most recent at the bottom.
 
 ### Telegram sent
 - Crash alert sent (True, 227 chars): "🚨 ENGINE CRASH — log stopped at 12:10 UTC today, engine was down ~7h. Restarted 19:03 UTC, now running cleanly. Balance $1,971.05 (was $1,989.84, -$18.79 unaccounted — check MT5 for trades closed during outage). No tuning done."
+
+---
+
+## 2026-06-01T09:08:00Z — owner-attended resumption (engine + autopilot both down)
+
+### State on return
+- Engine: STOPPED. Last `engine.log` entry 2026-05-10 14:21 UTC. No `engine.py` process. No `terminal64.exe` process.
+- Autopilot: failing. Scheduled tasks still fire (Morning/Evening/Weekly all triggered through today), but each exits with code 1 and no diary entry has been written since 2026-04-20.
+- Account: Pepperstone demo $1,980 (last recorded equity 2026-05-10), no damage.
+- Open proposals: 5 (still in autopilot_proposals.md).
+
+### Engine death — ROOT CAUSE identified
+- System `LastBootUpTime` = 2026-05-07 14:26 local. No reboot since.
+- "Forex Engine" scheduled task last started 5/7 14:27 local (at-logon + 1 min delay). Its `Settings.ExecutionTimeLimit = PT72H`.
+- 72 hours after 5/7 14:27 = 5/10 14:27 local. Last log entry is 5/10 14:21:19 UTC ≈ 5/10 15:21 local — i.e. ~73h after start.
+- LastTaskResult `267014` = `SCHED_S_TASK_TERMINATED`. No crash, no Traceback in engine.log. The engine was killed cleanly by the task scheduler at its time limit.
+- Why nothing recovered: both `MT5 AutoStart` and `Forex Engine` triggers are at-logon-only, and there's been no logon since 5/7. No watchdog exists.
+
+### Autopilot exit-1 — cause still unknown
+- `claude` CLI v2.1.154 still has all flags the bats use (`-p`, `--dangerously-skip-permissions`, `--max-budget-usd`). Earlier hypothesis (removed flag) is wrong.
+- Will capture one cycle's stdout/stderr to identify the real cause in next step.
+
+### MT5 instability noted (pre-existing, not the death cause)
+- `engine.log.1` shows persistent `IPC send failed` warnings on 2026-05-06 from ~18:21 onward across all 5 pairs and `account_info()`. MT5 appears to have been struggling before the reboot. Will revisit if it recurs after revival.
+
+### Plan for this session (owner has approved)
+1. Revive MT5 + engine.
+2. Capture and fix autopilot exit-1, confirm a cycle reaches exit 0.
+3. Harden: set Forex Engine `ExecutionTimeLimit = 0`, add a 5-min watchdog for `engine.py` + `terminal64.exe`, fix the dead path in `start_engine.bat`.
+4. Re-verify end-to-end.
+
+
+---
+
+## 2026-06-01T09:40:00Z — morning
+
+### Engine state
+- Engine is NOT healthy. Every startup today fails broker auth:
+  `MT5 initialize() failed: (-6, 'Terminal: Authorization failed')` →
+  `Broker authentication failed` at 09:10, 09:14, 09:30, 09:31 UTC
+  (engine.log stamps are local SAST/+02:00; real UTC confirmed 09:38).
+- A watchdog/scheduled task keeps relaunching the engine; each failed start
+  fires the engine's own 89-char Telegram auth alert (alert storm for owner).
+- `terminal64.exe` (MT5) IS running (PID 16256, ~17MB) but is not authorized
+  to the broker — platform up, login not connected.
+
+### Credentials check (read-only, did NOT modify)
+- `.env` mtime still 2026-03-31 15:22 and identical size (708 bytes) to
+  `.env.bak.20260601-114800`. Credentials on disk were NOT altered.
+- Conclusion: this is a broker/MT5-side login failure (likely demo session
+  needs interactive reconnect after the 6-week downtime), NOT a config bug.
+
+### Decision: NO credential fix, NO tuning, NO restart.
+- Rubric/safety: "logs contain Broker authentication failed → Telegram owner,
+  do not attempt to fix credentials yourself." Morning = no tuning regardless.
+- Did NOT restart: MT5 is already up but unauthorized and the watchdog is
+  already retrying; a manual restart would only add another failed-auth alert.
+
+### Actions taken
+- Sent ONE morning Telegram to owner (send_alert returned True).
+- Logged this entry. No files in allowed paths changed. No git commit.
+
+### For the owner when back
+- Reconnect MT5 to the broker account by hand (re-enter demo login in the
+  MT5 terminal), then confirm the engine logs "MT5 authenticated".
+- Consider: the restart watchdog should back off after repeated auth failures
+  instead of relaunching every few minutes (out of autopilot's allowed paths
+  — noted here only).
+
+### Telegram sent (True)
+"⚠️ MORNING — the engine cannot log in to the broker today. The MT5 platform
+is running but keeps returning 'authorization failed', so the engine will not
+start and is NOT trading. Your saved login details on disk are unchanged, so
+this looks like a broker/MT5 login that needs you to reconnect MT5 by hand when
+you're back. I did NOT change any credentials and did NOT tune anything.
+Session is offline until the login is fixed."
+
+## 2026-06-01T10:08:00Z — owner-attended resumption COMPLETE
+
+### Outcomes
+- **Engine: revived.** MT5 authenticated as 61536598 on Pepperstone-Demo (new $50k demo). Engine running, polling every 15s. Old demo (61500083) had been deactivated by Pepperstone during the downtime.
+- **Autopilot: fixed.** Root cause was `claude -p` in headless context not finding `ANTHROPIC_API_KEY`. All three bats (`deploy/autopilot_morning.bat`, `_evening.bat`, `_weekly.bat`) now load the key from `.env` before invoking claude. Confirmed exit 0 by reproducing the failure and validating the fix. Also stripped em-dashes from REM comments (cosmetic `'M' is not recognized` chatter).
+- **Engine task hardened.** `Forex Engine` task `ExecutionTimeLimit` changed from `PT72H` → `PT0S` (unlimited). The 72-hour kill that ended the 5/10 session can no longer recur.
+- **Engine watchdog added.** New scheduled task `Forex Engine Watchdog` runs every 5 min as SYSTEM via `C:\scripts\forex-engine-watchdog.ps1`. Restarts MT5/engine if down, with a back-off guard that skips restarts while broker auth has recently failed (prevents Telegram alert storms).
+- **`start_engine.bat` path fixed.** Was pointing at a OneDrive path that doesn't exist on this VPS; now `cd /d C:\forex-engine`.
+
+### Carry-over (deferred from this session)
+- Five open proposals in `logs/autopilot_proposals.md` remain unaddressed: sentiment-API truncated-JSON guard, SPOTCRUDE spread > 5.0-pip limit, low-volatility tuning candidates, hybrid MR+TF backtest for gold/crude, and the $18.79 reconciliation from the 2026-04-20 crash (old account is now closed — likely unrecoverable).
+- Trailing-stop state for `['GBPUSD','XAUUSD','USDCHF']` from the old account was restored on engine startup; harmless because the new MT5 account has zero open positions, but worth a watch.
+- MT5 `IPC send failed` warnings on 2026-05-06 went unexplained. Will revisit if recurs after revival.
+
+### Backups in place
+- `.env` backed up to `.env.bak.20260601-114800` (original 61500083 creds) and `.env.bak.20260601-115500` (intermediate).
+- Autopilot bats backed up to `deploy/_backups/autopilot_{morning,evening,weekly}.bat.20260601-113500`.
+
