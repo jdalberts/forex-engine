@@ -117,3 +117,17 @@ Phase 4 (6+ months): Expand pairs, volatility targeting, quarterly re-optimizati
 - [Tool & API Updates] MetaTrader5 Python package version 5.0.35 was released on April 11th, with bug fixes and minor performance improvements.
 - [Tool & API Updates] The ib_async library (Interactive Brokers Python) announced a breaking change on April 9th, requiring updates to the trading engine's order execution code.
 - [SA Regulation] The FSCA (Financial Sector Conduct Authority) in South Africa announced new leverage restrictions for retail forex and CFD trading on April 7th, lowering the maximum leverage to 1:20.
+
+
+### Auto-Research Scan (2026-04-19)
+- [Strategy & Market Research] A new academic paper published in the Journal of Empirical Finance on April 15th proposes a hybrid mean reversion and trend following strategy for commodity futures trading, showing promising out-of-sample results.
+- [Strategy & Market Research] A research report from Citi Global Markets on April 18th analyzes the recent shift in forex market volatility structure, suggesting a need to adapt trend following models to the new regime.
+- [Tool & API Updates] MetaTrader5 Python package version 5.0.35 was released on April 16th, with bug fixes and minor performance improvements.
+- [Tool & API Updates] The ib_async library for Interactive Brokers was updated to version 9.7.1 on April 17th, with support for the latest TWS API release.
+
+
+### Auto-Research Scan (2026-04-19)
+- [Strategy & Market Research] A new academic paper published in the Journal of Empirical Finance on April 15th proposes a hybrid mean reversion and trend following strategy for commodity futures trading, showing promising out-of-sample results.
+- [Strategy & Market Research] A research report from Citi Global Markets on April 18th analyzes the recent shift in forex market volatility structure, suggesting a need to adapt trend following models to the new regime.
+- [Tool & API Updates] MetaTrader5 Python package version 5.0.35 was released on April 16th, with bug fixes and minor performance improvements.
+- [Tool & API Updates] The ib_async library for Interactive Brokers was updated to version 9.7.1 on April 17th, with support for the latest TWS API release.
