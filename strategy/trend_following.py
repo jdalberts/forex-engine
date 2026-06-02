@@ -40,7 +40,7 @@ SLOW_EMA_PERIOD  = config.TF_SLOW_EMA_PERIOD   # slow EMA lookback
 ATR_PERIOD       = config.TF_ATR_PERIOD         # ATR lookback
 STOP_ATR_MULT    = config.TF_STOP_ATR_MULT      # stop distance in ATR units
 TARGET_ATR_MULT  = config.TF_TARGET_ATR_MULT    # target distance in ATR units (2:1 R)
-PULLBACK_ATR_DIST = getattr(config, "TF_PULLBACK_ATR_DIST", 0.3)  # pullback re-entry tolerance (ATR units)
+PULLBACK_ATR_DIST = getattr(config, "TF_PULLBACK_ATR_DIST", 0.225)  # pullback re-entry tolerance (ATR units) — autopilot 2026-06-02: 0.3→0.225 to curb SPOTCRUDE re-entry churn
 MIN_BARS         = SLOW_EMA_PERIOD + ATR_PERIOD + 5  # minimum bars needed
 
 
