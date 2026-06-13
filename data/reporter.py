@@ -18,22 +18,23 @@ from core import config, db
 
 
 def build_daily_report(
-    db_path:         str,
-    balance:         float,
-    initial_balance: float | None = None,
+    db_path:      str,
+    balance:      float,
+    peak_balance: float | None = None,
 ) -> str:
     """
     Build and return a Telegram-formatted daily summary string.
 
     Parameters
     ----------
-    db_path         : path to the SQLite database
-    balance         : current account balance (from EquityGuard or IG API)
-    initial_balance : starting balance for drawdown calculation;
-                      defaults to config.INITIAL_BALANCE if not supplied
+    db_path      : path to the SQLite database
+    balance      : current account balance (from EquityGuard or broker API)
+    peak_balance : high-water-mark balance for drawdown calculation.
+                   Defaults to `balance` (0% drawdown) if not supplied, so
+                   adding/withdrawing demo capital never produces a phantom DD.
     """
-    today     = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    peak      = initial_balance or config.INITIAL_BALANCE
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    peak  = peak_balance if peak_balance and peak_balance > 0 else balance
 
     # ── Today's trades ────────────────────────────────────────────────────────
     trades    = db.today_closed_trades(db_path)
