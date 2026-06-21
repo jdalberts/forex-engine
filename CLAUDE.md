@@ -103,6 +103,22 @@ check our DB, we might try to close an already-closed position, causing an API e
 - [ ] Remove orphaned test files: test_regime.py, test_switcher.py, test_trend.py
 - [ ] News filter: fix DST transition calculation
 
+### Phase 4.5 — AI Integration Enhancements [NEW — April 2026 research]
+
+Dispatched 4 research agents (see "AI Trading Research" below). These 5 items came out of that review — ordered by impact/risk:
+
+- [ ] **Fix `test_all.py`** — early `sys.exit(1)` at line 354 blocks Steps 7A-17 from ever running. Also Fix 1b (EURUSD removed from PAIRS), Steps 3a-f (TF EMA changed 12/26 → 20/50), Step 6i (hybrid uses `at least mean_reversion`). Gets CI green so future PRs can rely on the full suite.
+- [ ] **Fork `ariadng/metatrader-mcp-server`** — MCP bridge that lets Claude Code read ticks, positions, and equity from the running MT5 terminal in natural language. Low-risk research/monitoring co-pilot. Python engine stays the executor. Fork it, experiment, keep the bot untouched.
+- [ ] **Pine Script authoring via Claude** — write XAUUSD + SPOTCRUDE visual-confirmation indicators (MR/TF entry zones, ATR regime shade, COT bias overlay). Store under `pine/` directory. Use for manual chart review on TradingView; does NOT touch live trading loop. Claude Sonnet 4.5/4.6 benchmarked best-in-class for Pine v5/v6 (PickMyTrade).
+- [ ] **Re-scope sentiment layer** — current Finnhub + Claude design has weak evidence for forex (headlines are reports of past moves, not predictors). Changes needed:
+  - Drop Finnhub as primary source. Use central bank speech feeds (FOMC, ECB, BoJ, BoE) + economic calendar surprise (actual vs consensus).
+  - Cache by `(article_hash, prompt_version, model_version)` in SQLite so labels are reproducible across prompt tweaks.
+  - Strip tickers/currency names from prompts before classification (kills the "distraction effect" from Claude's general knowledge).
+  - Change semantics from continuous **gate** to event-driven **veto / risk-off regime flag**.
+  - Cap weight at 10-15% of total signal stack.
+  - Walk-forward validate only on data strictly **after** Claude's training cutoff. If you can't commit to this, kill the feature — it will silently inflate every backtest.
+- [ ] **Walk-forward validation framework** — Phase 3 originally, now moved up. Every sentiment/prompt/param change from here on needs strict post-cutoff walk-forward or it's compromised. Build a reusable `walk_forward.py` harness over `backtest.py` that slices time into train/test windows and reports out-of-sample stats. Blocks all future parameter tuning.
+
 ### Phase 5 — Live Account Migration
 - [ ] Demo trade 200+ trades to validate live vs backtest
 - [ ] Walk-forward results acceptable on live data
@@ -164,6 +180,59 @@ check our DB, we might try to close an already-closed position, causing an API e
 - **73% of automated trading accounts fail within 6 months** — conservative risk is correct
 - **44% of published strategies fail to replicate** on new data
 - **Configuration errors cost average 35% of capital** before being identified — thorough testing essential
+
+### AI Trading Research (April 2026)
+
+Dispatched 4 parallel research agents covering: real-world LLM trading results, Claude+TradingView integration, open-source AI trading tools, and LLM sentiment for forex. Key findings:
+
+**What actually works (empirical)**
+- **LLM-as-sentiment-filter over classical strategy** — Kirtac & Germano (2024): Sharpe 3.05 after 10bps costs on 965k news articles 2010-2023. Best-documented pattern. **But overwhelmingly on US equities, not forex.** (arXiv 2412.19245)
+- **LLM as research/code assistant** — where hedge funds actually spend their GenAI budget. No direct alpha claim; they claim faster idea-to-PnL. Resonanz Capital fund survey.
+- **LLM-guided RL** for regime detection — hybrid beat RL-only on 4/6 stocks. Maps onto the existing MR/TF regime switcher. (arXiv 2508.02366)
+- **Multi-agent "trading desk"** (TradingAgents, HedgeAgents) — academically hot, backtest-only, no audited live PnL. Numbers (70% ann., 400%/3y) trip the project's own overfit heuristics.
+
+**Dominant failure modes**
+- **Look-ahead contamination** — Glasserman & Lin (arXiv 2309.17322): GPT sentiment "alpha" in backtests is mostly pretraining memorization. After anonymizing tickers, much of the edge disappears. **Must-read before any sentiment work.**
+- **Distraction effect** — larger companies score worse because LLM world-knowledge overrides article text. Fix: strip tickers/names from prompts.
+- **Stochastic inference** — same prompt gives different labels across runs. Mitigation: temperature 0, majority voting, cache by `(article_hash, prompt_version)`.
+- **News lag** — commercial feeds are 200-2000ms behind price; sentiment alpha decays in seconds on liquid FX. Works only on daily/4H horizons (12-16 UTC window is fine).
+- **Prompt overfit** — tuning prompts on the same backtest window is the new curve-fitting.
+
+**LLM as primary signal source**
+- **No credible live track record.** Every published win uses the LLM as one input into a classical/RL overlay. Recommendation: keep Claude as a sentiment/veto filter on top of the MR/TF core. **Never let it size or pick direction.**
+
+**Forex-specific sentiment reality**
+- **Finnhub is equities-tooled.** FX headlines are reports of past moves ("USD strong on Fed minutes"), not leading indicators.
+- **Best FX sources instead**: FOMC/ECB/BoJ/BoE statements and speeches (FXStreet Speech Tracker, KC Fed research on hawkish-dovish scoring), economic calendar surprise, existing COT data.
+- `SENTIMENT_REFRESH_SEC=900` is in the dead zone — too slow for news reactions (priced in minutes), too fast for macro drift. Raise to 3600s and treat as daily bias, or drop to ~60s and accept you're still late.
+- `SENTIMENT_BLOCK_THRESHOLD=0.5` is raw model confidence, not calibrated P(loss). No production system uses a single threshold this way.
+
+**Claude + TradingView integration**
+- **"Code-level price reading"** in practice = Pine Script → MCP → Claude reads OHLCV as structured JSON. Three architectures in the wild:
+  1. Pine → MCP → Claude (structured data) — `tradesdontlie/tradingview-mcp` (1.6k ⭐), breaks on TV updates
+  2. Chart screenshot → Claude vision — works, slow, expensive
+  3. TV webhook → Claude API → broker — hobbyist copy-paste
+- **All MCPs are single-author, no tests, no SLAs.** Not production-grade.
+- **Claude IS the best LLM for Pine Script v5/v6** (PickMyTrade benchmark vs GPT-5). Use it for indicator authoring.
+- **Do NOT add TV+Claude to the live trading loop.** MT5 pipeline is already working; don't add latency and failure modes. Use Claude for Pine authoring only.
+
+**Directly actionable repos**
+| Repo | Why |
+|---|---|
+| `ariadng/metatrader-mcp-server` | MCP bridge for MT5 — plug directly into existing Pepperstone stack as research/monitoring co-pilot |
+| `TauricResearch/TradingAgents` (49.4k ⭐) | Cleanest open multi-agent reference. Mine ideas, don't run live. |
+| `nautechsystems/nautilus_trader` (9.1k ⭐) | Best-in-class Python+Rust execution engine. Target if MT5 is outgrown. |
+| `freqtrade/freqtrade` (40k ⭐) | Production-grade crypto bot. Steal risk/hyperopt/pairlist rotation patterns. |
+| `pipiku915/FinMem-LLM-StockTrading` | Layered-memory LLM trader, character profiles. Design inspiration for sentiment. |
+
+**Skip**: Pionex/Kryll/Stoic (grid bots marketed as AI), 3Commas/Cryptohopper "AI" (it's ML param tuning, not LLM reasoning), CrewAI/AutoGen trading tutorials (demos, no live), any sub-500-star `claude-trader`/`llm-tradebot` repo.
+
+**Top 5 sources worth reading**
+1. Glasserman & Lin — "Assessing Look-Ahead Bias in GPT Sentiment Trading" (arXiv 2309.17322) — **required reading**
+2. Kirtac & Germano — "Sentiment trading with LLMs" (arXiv 2412.19245) — the positive case, rigorous
+3. TauricResearch/TradingAgents (GitHub) — multi-agent reference architecture
+4. ariadng/metatrader-mcp-server (GitHub) — direct plug-in path
+5. Resonanz Capital — "How hedge funds are really using GenAI" — what funds actually deploy
 
 ---
 
